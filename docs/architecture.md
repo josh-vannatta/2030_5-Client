@@ -1,11 +1,12 @@
 # Architecture
+/ [Home](../README.md) — Return to root
 
 The IEEE 2030.5 DER Gateway is a two-process integration layer that bridges an IEEE 2030.5 utility server to field devices over Modbus TCP today and DNP3 later. It has two hard boundaries:
 
 - **Northbound:** IEEE 2030.5 server
 - **Southbound:** field device protocol adapter :contentReference[oaicite:0]{index=0}
 
-At a high level, the C client owns the IEEE 2030.5 wire protocol, while the Python gateway owns field integration, configuration, and runtime control translation. :contentReference[oaicite:1]{index=1}
+At a high level, the C client owns the IEEE 2030.5 wire protocol, while the Python gateway owns field integration, configuration, and runtime control translation.
 
 ## System context
 

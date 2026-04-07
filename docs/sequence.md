@@ -1,4 +1,5 @@
 # Operations
+/ [Home](../README.md) — Return to root
 
 This document describes how the IEEE 2030.5 DER Gateway behaves at runtime, how it is configured, what state it keeps, and how it fails. It is the primary operational reference for running, troubleshooting, and reasoning about the gateway in production-like environments. It consolidates the current lifecycle, state-management, and configuration behavior into one place. :contentReference[oaicite:0]{index=0} :contentReference[oaicite:1]{index=1}
 
