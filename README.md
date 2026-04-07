@@ -8,7 +8,7 @@ A Python integration layer that bridges an IEEE 2030.5 utility server to field d
 [Utility / Aggregator Server]
         ↕ IEEE 2030.5  (HTTPS + EXI/XML)
  ┌─────────────────────────────────┐
- │  epri_client/build/client_test  │  ← compiled C binary (EPRI)
+ │  core/build/client_test  │  ← compiled C binary (EPRI)
  │  emits EVENT_JSON: to stdout    │
  └──────────────┬──────────────────┘
                 │ JSON events (stdout pipe)
@@ -83,7 +83,7 @@ sudo apt-get install gcc libc6-dev make libssl-dev python3 python3-pip curl
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 3. Build the C client
-cd epri_client && make    # → build/client_test
+cd core && make    # → build/client_test
 cd ..
 
 # 4. Install Python package
@@ -161,7 +161,7 @@ logging:
 
 ```
 2030_5-client/
-├── epri_client/                  # EPRI C client (modified)
+├── core/                  # EPRI C client (modified)
 │   ├── Makefile                  # Linux build (replaces bash4-dependent build.sh)
 │   ├── der_client.c              # patched: emits EVENT_JSON: lines on DER events
 │   └── build/client_test         # compiled binary (after make)
@@ -224,8 +224,8 @@ Everything needed to go from zero to a structurally complete gateway.
 
 | What | Files | Notes |
 |---|---|---|
-| **Linux build** | [epri_client/Makefile](epri_client/Makefile) | Replaces the bash 4-only `build.sh`; works with gcc/clang |
-| **C patch** | [epri_client/der_client.c](epri_client/der_client.c) | Added `EVENT_JSON:` stdout lines for `start`, `end`, `default_control` events; Python reads these |
+| **Linux build** | [core/Makefile](core/Makefile) | Replaces the bash 4-only `build.sh`; works with gcc/clang |
+| **C patch** | [core/der_client.c](core/der_client.c) | Added `EVENT_JSON:` stdout lines for `start`, `end`, `default_control` events; Python reads these |
 | **Config** | [gateway/config.py](gateway/config.py) | Typed dataclasses; YAML load + env var overrides; validates cert paths at startup |
 | **Subprocess wrapper** | [gateway/client.py](gateway/client.py) | Spawns `client_test`, reads stdout line-by-line, yields parsed JSON dicts |
 | **Bridge** | [gateway/bridge.py](gateway/bridge.py) | Maps `DERControlBase` fields to Modbus register writes; tracks active registers for relinquish |
@@ -274,7 +274,7 @@ load config → connect Modbus → read device registers → write settings XML
 
 ## How the C Patch Works
 
-`epri_client/der_client.c` emits one `EVENT_JSON:` line per DER event transition:
+`core/der_client.c` emits one `EVENT_JSON:` line per DER event transition:
 
 ```
 EVENT_JSON:{"type":"start","sfdi":320841683177,"mrid":"0102...","description":"Curtail 50%","control":{"opModFixedW":-50,"rampTms":100}}

@@ -30,7 +30,7 @@ from .settings import DERState, write_settings
 logger = logging.getLogger(__name__)
 
 _DEFAULT_CONFIG = Path(__file__).parent.parent / "config" / "gateway.yaml"
-_SETTINGS_DIR = Path(__file__).parent.parent / "epri_client" / "settings"
+_SETTINGS_DIR = Path(__file__).parent.parent / "core" / "settings"
 
 
 def main(argv: list[str] | None = None) -> int:

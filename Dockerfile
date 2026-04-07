@@ -36,7 +36,7 @@ WORKDIR /app
 # Dev Containers mount the repo over /app after image build, so the COPY layer
 # is replaced. The RUN steps below only run for production/CI builds.
 COPY . .
-RUN cd epri_client && make
+RUN cd core && make
 RUN uv sync --all-groups
 
 # Certs and config mounted at runtime

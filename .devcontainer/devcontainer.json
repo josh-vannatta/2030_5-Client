@@ -15,7 +15,7 @@
   // Runs from the workspace root (/workspaces/2030_5-client) after source is mounted.
   // make clean forces a fresh arm64 build — skipping it risks running a stale
   // x86-64 binary from a cached Docker layer.
-  "postCreateCommand": "cd epri_client && make clean && make && cd .. && uv sync --all-groups",
+  "postCreateCommand": "cd core && make clean && make && cd .. && uv sync --all-groups",
 
   "customizations": {
     "vscode": {
@@ -24,7 +24,7 @@
         "ms-python.python",
         "ms-python.vscode-pylance",
         "ms-python.debugpy",
-        // C/C++ (for epri_client browsing)
+        // C/C++ (for core browsing)
         "ms-vscode.cpptools",
         // Linting / formatting
         "charliermarsh.ruff",

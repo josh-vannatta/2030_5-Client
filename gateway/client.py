@@ -1,6 +1,6 @@
 """Subprocess wrapper for the EPRI IEEE 2030.5 C binary.
 
-Spawns ``epri_client/build/client_test``, reads its stdout line-by-line,
+Spawns ``core/build/client_test``, reads its stdout line-by-line,
 and yields parsed DER events. Lines not prefixed with EVENT_JSON: are
 forwarded to the Python logger as debug output.
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 EVENT_PREFIX = "EVENT_JSON:"
 
 # Resolved relative to this file's location at import time
-_DEFAULT_BINARY = Path(__file__).parent.parent / "epri_client" / "build" / "client_test"
+_DEFAULT_BINARY = Path(__file__).parent.parent / "core" / "build" / "client_test"
 
 
 class EpriClientError(RuntimeError):
@@ -47,7 +47,7 @@ class EpriClient:
         if not self.binary.exists():
             raise EpriClientError(
                 f"client_test binary not found at {self.binary}. "
-                "Run `make` inside epri_client/ first."
+                "Run `make` inside core/ first."
             )
         args = self._build_args()
         logger.info("Starting EPRI client: %s", " ".join(str(a) for a in args))

@@ -10,8 +10,8 @@ build/
 # uv.lock is intentionally NOT listed here — commit it to the repo
 
 # C build artifacts
-epri_client/build/
-epri_client/*.dep
+core/build/
+core/*.dep
 
 # Certificates — nevder commit
 config/certs/*.pem
