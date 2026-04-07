@@ -1,6 +1,6 @@
 # IEEE 2030.5 DER Gateway
 
-A two-process gateway that bridges an IEEE 2030.5 utility server to field devices over Modbus TCP today and DNP3 later. The Python gateway owns configuration, field-device reads/writes, XML generation, subprocess lifecycle, and runtime control translation, while the EPRI `client_test` C binary owns the 2030.5 wire protocol, TLS, EXI, resource traversal, and DERControl scheduling. :contentReference[oaicite:0]{index=0} :contentReference[oaicite:1]{index=1}
+A two-process gateway that bridges an IEEE 2030.5 utility server to field devices over Modbus TCP today and DNP3 later. The Python gateway owns configuration, field-device reads/writes, XML generation, subprocess lifecycle, and runtime control translation, while the EPRI `client_test` C binary owns the 2030.5 wire protocol, TLS, EXI, resource traversal, and DERControl scheduling.
 
 ## Architecture
 
