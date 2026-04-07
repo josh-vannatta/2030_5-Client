@@ -7,7 +7,7 @@ sequenceDiagram
     participant SRV as 2030.5 Server
 
     %% ── Failure 1: bad config ────────────────────────────────────────────
-    rect rgb(230,230,230)
+    rect rgb(240,240,240)
         Note over PY,CFG: Failure: invalid gateway.yaml or missing cert / CA path
         PY  ->>  CFG: config.load()
         CFG -->> PY: ValueError / FileNotFoundError
@@ -15,7 +15,7 @@ sequenceDiagram
     end
 
     %% ── Failure 2: startup register read ────────────────────────────────
-    rect rgb(230,230,230)
+    rect rgb(240,240,240)
         Note over PY,MB: Failure: startup register read error
         PY  ->>  MB: connect()
         MB -->>  PY: connected
@@ -25,7 +25,7 @@ sequenceDiagram
     end
 
     %% ── Failure 3: client_test binary missing ────────────────────────────
-    rect rgb(230,230,230)
+    rect rgb(240,240,240)
         Note over PY,C: Failure: client_test binary not found
         PY  ->>  C: EpriClient.start() → spawn(client_test)
         C  -->>  PY: FileNotFoundError
@@ -34,7 +34,7 @@ sequenceDiagram
     end
 
     %% ── Failure 4: client_test exits non-zero ────────────────────────────
-    rect rgb(230,230,230)
+    rect rgb(240,240,240)
         Note over C,SRV: Failure: client_test exits with non-zero return code
         SRV ->>  C: (event or error)
         C  -->>  PY: stdout EOF, returncode != 0
@@ -43,7 +43,7 @@ sequenceDiagram
     end
 
     %% ── Failure 5: register write failure ───────────────────────────────
-    rect rgb(230,230,230)
+    rect rgb(240,240,240)
         Note over PY,MB: Failure: Modbus write error during active event
         PY  ->>  MB: write_register(address, value)
         MB -->>  PY: exception (connection lost / timeout)

@@ -5,23 +5,22 @@ sequenceDiagram
     participant C   as C Binary
     participant MB  as Modbus Device
 
-    Note over SIG,PY: teardown is triggered by one of three paths
+    Note over SIG,PY: teardown on one of three paths
 
-    alt C process exits on its own (non-zero exit or stdout EOF)
+    alt C Process
         C  -->> PY: stdout closed
-        PY ->>  PY: EpriClientError raised in events()
-    else Python receives SIGINT / SIGTERM
+    else SIGINT
         SIG ->> PY: interrupt / signal
-    else unhandled exception in event loop
-        PY  ->> PY: exception propagates out of main()
+    else Exception
+        PY  ->> PY: exception propagates
     end
 
     Note over PY,C: EpriClient.__exit__() → stop()
 
     PY  ->>  C: SIGTERM
-    PY  ->>  PY: wait(timeout = 5 s)
+    PY  ->>  PY: wait(timeout = 5s)
 
-    alt graceful exit within 5 s
+    alt 5s graceful exit
         C  -->> PY: process terminated
     else timeout exceeded
         PY  ->>  C: SIGKILL (force kill)
@@ -34,5 +33,4 @@ sequenceDiagram
     MB -->>  PY: disconnected
 
     Note over PY: process exits
-
     Note over MB: ⚠ if an event was active when teardown began,<br/>last-written register values remain on the device.<br/>Registers are NOT automatically relinquished on crash.
