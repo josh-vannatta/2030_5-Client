@@ -9,7 +9,7 @@ At a high level, the C client owns the IEEE 2030.5 wire protocol, while the Pyth
 
 ## System context
 
-> Diagram: [p0_system_overview.mermaid](architecture/p0_system_overview.mermaid)
+> Diagram: [01_system_overview.mermaid](architecture/01_system_overview.mermaid)
 
 ```text
 [Utility / Aggregator Server]
@@ -62,7 +62,7 @@ The Python side handles everything outside the 2030.5 transport:
 
 ## Module layout
 
-> Diagram: [p0_component_map.mermaid](architecture/p0_component_map.mermaid)
+> Diagram: [02_component_map.mermaid](architecture/02_component_map.mermaid)
 
 The Python package is structured around a small set of focused modules:
 
@@ -97,7 +97,7 @@ EVENT_JSON:{"type":"default_control","control":{"opModMaxLimW":10000,"opModConne
 
 ## Northbound and southbound flows
 
-> Diagram: [p0_data_model.mermaid](architecture/p0_data_model.mermaid)
+> Diagram: [03_data_model.mermaid](architecture/03_data_model.mermaid)
 
 The gateway has two primary data flows.
 
@@ -154,7 +154,7 @@ A key architectural constraint in the current implementation is that the XML set
 
 ## 2030.5 resource traversal
 
-> Diagram: [p0_resource_traversal.mermaid](architecture/p0_resource_traversal.mermaid)
+> Diagram: [p0_resource_traversal.mermaid](architecture/04_resource_traversal.mermaid)
 
 After startup, the C client performs standard 2030.5 discovery and traversal. The documented traversal path is:
 
@@ -225,7 +225,7 @@ Not implemented yet:
 
 ## Class reference
 
-The diagram at [`docs/architecture/p0_gateway_classes.mermaid`](architecture/p0_gateway_classes.mermaid) shows every class in `gateway/`. A summary of each class and its role:
+The diagram at [`docs/architecture/05_gateway_classes.mermaid`](architecture/05_gateway_classes.mermaid) shows every class in `gateway/`. A summary of each class and its role:
 
 | Class | Module | Kind | Role |
 |---|---|---|---|

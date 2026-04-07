@@ -39,8 +39,8 @@ State after INIT:
 
 ### 2. STARTUP
 
-> Diagram: [p1_startup_sequence.mermaid](sequence/p1_startup_sequence.mermaid) — full INIT → STARTUP → first event delivery  
-> Diagram: [p0_resource_traversal.mermaid](sequence/p0_resource_traversal.mermaid) — 2030.5 discovery and traversal detail
+> Diagram: [01_startup_sequence.mermaid](sequence/01_startup_sequence.mermaid) — full INIT → STARTUP → first event delivery  
+> Diagram: [02_resource_traversal.mermaid](sequence/02_resource_traversal.mermaid) — 2030.5 discovery and traversal detail
 
 During STARTUP, the protocol adapter connects, startup reads are performed, the device snapshot is converted into `DERState`, and the four XML files are written into `core/settings/`. The C client is then started and immediately reads those XML files. 
 
@@ -53,14 +53,14 @@ State after STARTUP:
 
 ### 3. EVENT LOOP
 
-> Diagram: [p1_event_start_end.mermaid](sequence/p1_event_start_end.mermaid) — start and end event flow  
-> Diagram: [p1_event_default_control.mermaid](sequence/p1_event_default_control.mermaid) — default_control event flow
+> Diagram: [03_event_start_end.mermaid](sequence/03_event_start_end.mermaid) — start and end event flow  
+> Diagram: [04_event_default_control.mermaid](sequence/04_event_default_control.mermaid) — default_control event flow
 
 The Python gateway blocks on stdout from the C client. Each line prefixed with `EVENT_JSON:` is parsed and dispatched through `DERBridge.apply()`. During this phase, the main mutable runtime state is `_active_registers`, which tracks addresses written by the currently active control context.  
 
 ### 4. TEARDOWN
 
-> Diagram: [p0_teardown_sequence.mermaid](sequence/p0_teardown_sequence.mermaid)
+> Diagram: [05_teardown_sequence.mermaid](sequence/05_teardown_sequence.mermaid)
 
 Teardown happens when the C subprocess exits, or when Python unwinds due to exception or interrupt. The gateway attempts graceful subprocess termination first, then forces termination if needed, and disconnects the field-protocol adapter during context-manager cleanup. 
 
@@ -123,7 +123,7 @@ The key nuance is that `default_control` clears `_active_registers` and then wri
 
 ## Failure behavior
 
-> Diagram: [p0_failure_modes.mermaid](sequence/p0_failure_modes.mermaid)
+> Diagram: [06_failure_modes.mermaid](sequence/06_failure_modes.mermaid)
 
 Operationally, the gateway fails in a few distinct ways.
 
@@ -154,5 +154,5 @@ The following diagrams cover the northbound protocol stack below the Python/C bo
 
 | Diagram | What it shows |
 |---|---|
-| [p2_tls_packet_exchange.mermaid](sequence/p2_tls_packet_exchange.mermaid) | Full TLS 1.2 mutual-auth handshake: ClientHello → CertificateVerify → session keys |
-| [p2_exi_encoding.mermaid](sequence/p2_exi_encoding.mermaid) | EXI encode/decode path: C struct → EXI codec → TLS → server response |
+| [07_tls_packet_exchange.mermaid](sequence/07_tls_packet_exchange.mermaid) | Full TLS 1.2 mutual-auth handshake: ClientHello → CertificateVerify → session keys |
+| [08_exi_encoding.mermaid](sequence/08_exi_encoding.mermaid) | EXI encode/decode path: C struct → EXI codec → TLS → server response |
