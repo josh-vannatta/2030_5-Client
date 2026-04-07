@@ -118,6 +118,7 @@ class EpriClient:
             args.append(cfg.ca_dir)
         args.append(cfg.server_uri)
         args.append(cfg.command)
+        args += ["poll", str(cfg.poll_rate)]
         if cfg.pin:
             args += ["pin", cfg.pin]
         if cfg.sfdi:

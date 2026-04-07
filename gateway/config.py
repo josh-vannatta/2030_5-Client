@@ -92,6 +92,9 @@ class Config:
     sfdi: str
     # Startup command passed to client_test binary
     command: str = "all"
+    # DERControlList poll interval in seconds (passed as `poll <n>` to client_test)
+    # Defaults to 300 s (the client_test hardcoded default in core/schedule.c)
+    poll_rate: int = 300
     # PIN for in-band registration (optional)
     pin: str | None = None
     # Field protocol type
@@ -199,6 +202,7 @@ def _build(raw: dict) -> Config:
         ca_dir=device.get("ca_dir", ""),
         sfdi=str(device.get("sfdi", "")),
         command=server.get("command", "all"),
+        poll_rate=int(server.get("poll_rate", 300)),
         pin=str(device["pin"]) if device.get("pin") else None,
         protocol=proto_type,
         modbus=modbus_cfg,

@@ -49,13 +49,15 @@ server:
   interface: "eth0"
   uri: "https://192.168.1.100/sep2"
   command: "all"
+  poll_rate: 300
 ```
 
 Operational meaning:
 
 * `interface` is passed through to the C client
 * `uri` is the 2030.5 server base URI
-* `command` selects the C-client operation mode, with `all` as the normal setting 
+* `command` selects the C-client operation mode, with `all` as the normal setting
+* `poll_rate` sets the `DERControlList` poll interval in seconds (default `300`); passed to `client_test` as `poll <n>`. Controls how quickly the gateway detects new or changed DER controls. Note: `FunctionSetAssignmentsList`, `DERProgramList`, and `Time` use the server's own `pollRate` field and are unaffected by this setting.
 
 ### `protocol`
 
@@ -129,6 +131,7 @@ server:
   interface: "eth0"
   uri: "https://192.168.1.100/sep2"
   command: "all"
+  poll_rate: 300
 
 protocol:
   type: modbus

@@ -181,6 +181,7 @@ server:
   interface: "eth0"
   uri: "https://192.168.1.100/sep2"
   command: "all"                     # register | all | metering | fsa
+  poll_rate: 300                     # DERControlList poll interval (seconds)
 
 protocol:
   type: modbus

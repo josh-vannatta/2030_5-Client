@@ -54,9 +54,22 @@ State after STARTUP:
 
 The Python gateway blocks on stdout from the C client. Each line prefixed with `EVENT_JSON:` is parsed and dispatched through `DERBridge.apply()`. During this phase, the main mutable runtime state is `_active_registers`, which tracks addresses written by the currently active control context.
 
-**C-side polling (invisible to Python):** Concurrently, the C binary runs `der_poll()` (`core/der_client.c`) in its own event loop. `RESOURCE_POLL` events re-fetch 2030.5 resources from the server according to a per-resource `poll_rate` (e.g. `FunctionSetAssignmentsList` every 10 seconds). When a polled resource changes, `RESOURCE_UPDATE` causes the local DER schedule to be recalculated. Schedule transitions then produce `EVENT_JSON:` lines — this is the only mechanism that drives Python-side action. The Python gateway has no polling of its own and is entirely reactive to what the C binary emits.
+**C-side polling (invisible to Python):** Concurrently, the C binary runs `der_poll()` (`core/der_client.c`) in its own event loop. `RESOURCE_POLL` events re-fetch 2030.5 resources from the server on per-resource timers. When a polled resource changes, `RESOURCE_UPDATE` recalculates the local DER schedule; a schedule transition then emits an `EVENT_JSON:` line. This is the only mechanism that drives Python-side action — the Python gateway has no polling of its own and is entirely reactive.
 
-> **No push/subscription:** `subscribe.c` is present in the EPRI library but is commented out in `der_client.c`. Server-model updates reach the C binary exclusively through polling. 
+> **No push/subscription:** `subscribe.c` is present in the EPRI library but is commented out in `der_client.c`. Server-model updates reach the C binary exclusively through polling.
+
+#### Poll rates (when command is `all`)
+
+> Diagram: [09_polling_cycle.mermaid](sequence/09_polling_cycle.mermaid)
+
+| Resource | Poll rate | Source |
+| --- | --- | --- |
+| `FunctionSetAssignmentsList` | server `pollRate` field, fallback **900 s** | `edev_complete()` in `client_test.c` |
+| `DERProgramList` | server `pollRate` field, fallback **900 s** | `poll_derpl()` in `client_test.c` |
+| `DERControlList` | `poll_rate` in `gateway.yaml` (`server.poll_rate`), default **300 s** | `der_program()` in `client_test.c` |
+| `Time` | server `pollRate` field, fallback **900 s** | `time_sync()` in `client_test.c` |
+
+The `FunctionSetAssignmentsList`, `DERProgramList`, and `Time` poll rates are server-controlled: the C binary reads the `pollRate` element from the server's response and uses that interval, falling back to 900 s if the field is absent. The `DERControlList` rate is set by `server.poll_rate` in `gateway.yaml` (default **300 s**), which is passed to `client_test` as `poll <n>` via `_build_args()` in `gateway/client.py`.
 
 ### 4. TEARDOWN
 
@@ -65,42 +78,6 @@ The Python gateway blocks on stdout from the C client. Each line prefixed with `
 Teardown happens when the C subprocess exits, or when Python unwinds due to exception or interrupt. The gateway attempts graceful subprocess termination first, then forces termination if needed, and disconnects the field-protocol adapter during context-manager cleanup. 
 
 Important caveat: if the gateway exits in the middle of an active event, the field device keeps the last written values. Registers are not automatically relinquished on crash or hard exit. 
-
-## C-side polling cycle
-
-> Diagram: [09_polling_cycle.mermaid](sequence/09_polling_cycle.mermaid) — resource poll → model update → EVENT_JSON emission
-
-The Python gateway is purely reactive. All 2030.5 server communication happens inside the C binary, driven by `der_poll()` in `core/der_client.c`. Understanding this cycle explains where `EVENT_JSON:` lines actually come from during steady-state operation.
-
-### The poll loop
-
-After initial resource traversal, the C binary runs a continuous event loop. Each resource that participates in DER scheduling is assigned a `poll_rate` (in seconds). When the timer for a resource expires, `der_poll()` receives a `RESOURCE_POLL` event and issues a fresh `GET` to the server for that resource.
-
-Resources polled in the reference implementation:
-
-| Resource | Typical poll_rate | Purpose |
-|---|---|---|
-| `FunctionSetAssignmentsList` | 10 s | detect new or removed DER programs |
-| `DERProgramList` | 10 s | detect program changes, new controls |
-| `DERControlList` | 10 s | detect new, changed, or cancelled controls |
-| `DefaultDERControl` | 10 s | detect fallback setpoint changes |
-
-> **No push/subscription:** `subscribe.c` is present in the EPRI library but is commented out in `core/der_client.c`. The server never initiates contact. Every model update reaches the C binary through polling.
-
-### From poll to EVENT_JSON
-
-A poll response only produces downstream activity when the resource has changed:
-
-1. **No change** — response discarded, timer rescheduled. Python sees nothing.
-2. **Resource changed** → `RESOURCE_UPDATE` — `update_resource()` rebuilds the local dependency graph and resource model.
-3. **Model change affects schedule** → `SCHEDULE_UPDATE` — `update_schedule()` recalculates which DERControl events are active, pending, or cancelled.
-4. **Schedule transition** — if a control becomes active, is superseded, or expires, the C binary emits an `EVENT_JSON:` line to stdout. Python receives it and `DERBridge.apply()` writes the corresponding Modbus registers.
-
-This means there is no direct path from a server-side control change to a field-device write — the change must be polled, scheduled locally, and reach a start/end boundary before Python is involved.
-
-### Polling is invisible to Python
-
-The Python gateway has no visibility into the polling cycle. It cannot tell whether the C binary is polling normally, whether a resource has changed, or whether a schedule recalculation has occurred. From Python's perspective, the C binary is simply a process whose stdout may or may not produce `EVENT_JSON:` lines. The absence of output is indistinguishable between "polling, nothing changed" and "C binary has stalled."
 
 ## Event handling semantics
 

@@ -22,6 +22,11 @@ server:
   uri: "https://192.168.1.100/sep2"
   # Startup command: register | all | metering | fsa
   command: "all"
+  # DERControlList poll interval in seconds (default: 300)
+  # Controls how frequently client_test re-fetches DERControlList from the server.
+  # Other resources (FunctionSetAssignmentsList, DERProgramList, Time) use the
+  # server's own pollRate field and are not affected by this setting.
+  poll_rate: 300
 
 protocol:
   # Field protocol: modbus | dnp3
