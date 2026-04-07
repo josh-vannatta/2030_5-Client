@@ -43,8 +43,11 @@ The patched EPRI IEEE 2030.5 Client owns the full IEEE 2030.5 stack:
 * TLS 1.2 with mutual authentication
 * EXI encoding and decoding
 * 2030.5 resource discovery and traversal
-* DERControl scheduling
-* certificate-based device identity 
+* **periodic server polling** — the `der_poll()` loop in `core/der_client.c` handles `RESOURCE_POLL` events, re-fetching resources on a per-resource interval set via `r->poll_rate`; this is how the C client keeps its local resource model synchronized with the server over time
+* DERControl scheduling (local, timer-driven from the polled resource model)
+* certificate-based device identity
+
+> **No push/subscription:** the EPRI client library includes a `subscribe.c` module but it is commented out in `der_client.c`. All server-model updates flow through polling, not server-initiated notifications. 
 
 This binary is Linux-only because it uses `epoll`. On macOS, development and execution must happen inside Docker or the VS Code Dev Container.  
 
@@ -156,7 +159,7 @@ A key architectural constraint in the current implementation is that the XML set
 
 > Diagram: [04_resource_traversal.mermaid](architecture/04_resource_traversal.mermaid)
 
-After startup, the C client performs standard 2030.5 discovery and traversal. The documented traversal path is:
+After startup, the C client performs standard 2030.5 discovery and traversal, then enters a polling loop to keep resources current. The traversal path is:
 
 ```text
 GET /dcap
@@ -166,11 +169,14 @@ GET /dcap
   → GET /edev/{sfdi}/fsa/derp
   → GET /edev/{sfdi}/fsa/derp/{id}/dderc
   → GET /edev/{sfdi}/fsa/derp/{id}/derc
-  → POST subscription
   → PUT DER resources
+  → [periodic polling begins]
+       → RESOURCE_POLL timer fires → re-GET resources
+       → RESOURCE_UPDATE → reschedule local DER events
+       → SCHEDULE_UPDATE → EVENT_START / EVENT_END emitted
 ```
 
-This is the conceptual resource graph reflected in the existing architecture and sequence documentation. 
+Initial traversal is a one-time walk of the resource graph. After that, `der_poll()` in `core/der_client.c` drives an event loop where `RESOURCE_POLL` events re-fetch individual resources according to their `poll_rate`. When a polled resource changes, `RESOURCE_UPDATE` causes the local event schedule to be recalculated; schedule transitions then produce `EVENT_START` / `EVENT_END`, which are emitted as `EVENT_JSON:` to the Python gateway. 
 
 The SFDI in those resource paths is derived from the device certificate rather than manually chosen. The development and configuration guides both note that `scripts/gen_dev_certs.py` generates certificates, computes the SFDI, and writes it back into `gateway.yaml`.  
 

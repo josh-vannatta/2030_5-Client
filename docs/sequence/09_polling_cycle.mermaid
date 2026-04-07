@@ -1,0 +1,45 @@
+sequenceDiagram
+    autonumber
+    participant TM  as Poll Timer
+    participant C   as C Binary (der_poll)
+    participant SRV as 2030.5 Server
+    participant SCH as Local Scheduler
+    participant PY  as Python Gateway
+
+    Note over TM,C: steady state — poll timer fires
+
+    TM  ->> C: RESOURCE_POLL (FunctionSetAssignmentsList, poll_rate=10s)
+    C   ->> SRV: GET /edev/{sfdi}/fsa
+    SRV -->> C: 200 OK  FunctionSetAssignments (unchanged)
+    Note over C: no change — discard, reschedule timer
+
+    TM  ->> C: RESOURCE_POLL (DERProgramList, poll_rate=10s)
+    C   ->> SRV: GET /edev/{sfdi}/fsa/derp
+    SRV -->> C: 200 OK  DERProgramList (unchanged)
+    Note over C: no change — discard, reschedule timer
+
+    Note over TM,SRV: server updates a DERControl
+
+    TM  ->> C: RESOURCE_POLL (DERControlList, poll_rate=10s)
+    C   ->> SRV: GET /edev/{sfdi}/fsa/derp/{id}/derc
+    SRV -->> C: 200 OK  DERControlList (new or changed control)
+
+    Note over C: RESOURCE_UPDATE — model changed
+
+    C   ->> SCH: update_resource() → rebuild dependency graph
+    SCH ->> SCH: reschedule events with updated DERControlList
+
+    Note over SCH: SCHEDULE_UPDATE
+
+    SCH ->> C: update_schedule(s)
+
+    alt new control becomes active now
+        C   ->> PY: EVENT_JSON: {type:start, mrid:..., control:{...}}
+        Note over PY: bridge.apply() → write Modbus registers
+    else active control superseded or cancelled
+        C   ->> PY: EVENT_JSON: {type:end, mrid:...}
+        Note over PY: bridge._relinquish() → write 0 to tracked registers
+    else no active controls remain and DefaultDERControl exists
+        C   ->> PY: EVENT_JSON: {type:default_control, control:{...}}
+        Note over PY: bridge.apply() → apply fallback setpoints
+    end

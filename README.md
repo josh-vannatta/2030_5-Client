@@ -37,7 +37,8 @@ The system has two hard boundaries:
 * mutual-auth TLS
 * EXI encoding/decoding
 * 2030.5 resource discovery and traversal
-* DERControl scheduling
+* periodic server polling — `der_poll()` in `core/der_client.c` re-fetches resources on a per-resource timer (`r->poll_rate`); the `FunctionSetAssignmentsList` and related DER resources are polled on this interval to keep the local schedule current (push/subscription is not supported by the EPRI client — `subscribe.c` is present but commented out)
+* DERControl scheduling (local, timer-driven)
 * certificate-based device identity 
 
 **Python gateway (`gateway/`)**
@@ -77,8 +78,8 @@ load config
   → build DERState
   → write settings XML
   → spawn client_test
-  → 2030.5 resource discovery
-  → subscribe to DERControl
+  → 2030.5 resource discovery and traversal
+  → begin periodic polling of DER resources (C-side, timer-driven)
   → EVENT_JSON loop
   → write field registers on DER events
 ```
