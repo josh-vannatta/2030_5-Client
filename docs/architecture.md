@@ -154,7 +154,7 @@ A key architectural constraint in the current implementation is that the XML set
 
 ## 2030.5 resource traversal
 
-> Diagram: [p0_resource_traversal.mermaid](architecture/04_resource_traversal.mermaid)
+> Diagram: [04_resource_traversal.mermaid](architecture/04_resource_traversal.mermaid)
 
 After startup, the C client performs standard 2030.5 discovery and traversal. The documented traversal path is:
 
