@@ -1,0 +1,53 @@
+# IEEE 2030.5 Gateway Configuration
+#
+# Secrets (sfdi, pin, cert path) can be overridden via environment variables:
+#   GATEWAY_SFDI   — device SFDI
+#   GATEWAY_PIN    — registration PIN
+#   GATEWAY_CERT   — path to device certificate
+
+device:
+  # Short-Form Device Identifier (last 5 digits of SHA-256 of LFDI)
+  sfdi: "111115"
+  # Path to device certificate (PEM format)
+  cert: "config/certs/device.pem"
+  # Directory containing trusted CA certificates
+  ca_dir: "config/certs/ca/"
+  # PIN for in-band registration (omit if using out-of-band)
+  pin: "111115"
+
+server:
+  # Network interface to bind (e.g. eth0, en0)
+  interface: "eth0"
+  # 2030.5 server base URI
+  uri: "https://192.168.1.100/sep2"
+  # Startup command: register | all | metering | fsa
+  command: "all"
+
+protocol:
+  # Field protocol: modbus | dnp3
+  type: modbus
+
+  modbus:
+    host: "192.168.1.200"
+    port: 502
+    unit_id: 1
+    timeout: 5.0
+    # Holding register addresses for DER control points
+    registers:
+      active_power: 40100    # opModFixedW / opModTargetW  (signed %)
+      reactive_power: 40101  # opModFixedVar / opModTargetVar
+      max_power_limit: 40102 # opModMaxLimW  (unsigned %)
+      ramp_time: 40103       # rampTms  (1/100 s)
+      connect: 40104         # opModConnect  (0=disconnect, 1=connect)
+      energize: 40105        # opModEnergize (0=de-energize, 1=energize)
+
+  # dnp3:
+  #   host: "192.168.1.201"
+  #   port: 20000
+  #   master_address: 1
+  #   outstation_address: 10
+
+logging:
+  level: INFO        # DEBUG | INFO | WARNING | ERROR
+  format: text       # text | json
+  # file: /var/log/gateway.log  # omit to log to stdout only

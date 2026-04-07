@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+.pytest_cache/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+.pytest_cache/
+# uv.lock is intentionally NOT listed here — commit it to the repo
+
+# C build artifacts
+epri_client/build/
+epri_client/*.dep
+
+# Certificates — nevder commit
+config/certs/*.pem
+config/certs/*.crt
+config/certs/*.key
+config/certs/ca/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
