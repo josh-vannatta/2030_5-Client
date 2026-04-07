@@ -1,22 +1,32 @@
-# Configuration Reference
 
-All configuration lives in a single YAML file (default: `config/gateway.yaml`). Pass an alternate path with `--config <path>`.
+## Configuration
 
-Secrets can be injected via environment variables — they override the corresponding YAML field:
+All runtime configuration lives in `config/gateway.yaml` by default. An alternate file can be provided with `--config <path>`. Environment variables can override selected identity fields without editing the file. 
 
-| Env var | YAML key | Notes |
-|---------|----------|-------|
-| `GATEWAY_SFDI` | `device.sfdi` | Override SFDI without editing the file |
-| `GATEWAY_PIN` | `device.pin` | In-band registration PIN |
-| `GATEWAY_CERT` | `device.cert` | Path to device certificate |
+### Environment overrides
 
----
+| Env var        | YAML key      | Purpose                   |
+| -------------- | ------------- | ------------------------- |
+| `GATEWAY_SFDI` | `device.sfdi` | override SFDI             |
+| `GATEWAY_PIN`  | `device.pin`  | inject in-band PIN        |
+| `GATEWAY_CERT` | `device.cert` | override certificate path |
 
-## `device`
+These overrides are applied during config load before validation.  
 
-Identity and certificate configuration for this DER device.
+### Configuration structure
 
-```yaml
+The config file is organized into four top-level sections:
+
+* `device`
+* `server`
+* `protocol`
+* `logging` 
+
+### `device`
+
+The `device` block defines identity and certificate settings.
+
+```yaml id="5gr0cu"
 device:
   sfdi: "320841683177"
   cert: "config/certs/device.pem"
@@ -24,41 +34,35 @@ device:
   pin: "111115"
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `sfdi` | string | yes | 36-bit device identifier (decimal). Derived from certificate — run `scripts/gen_dev_certs.py` to compute. |
-| `cert` | path | yes | PEM file containing the device's ECDSA P-256 certificate and private key. Validated at startup. |
-| `ca_dir` | path | yes | Directory containing trusted CA certificate(s) (`ca.pem`). Used for server cert verification. |
-| `pin` | string | no | In-band registration PIN. Only needed if the server requires device self-registration via `POST /edev`. |
+Key points:
 
-**SFDI generation:** The SFDI is computed as `SHA-256(pem_bytes)[:5_bytes] >> 4`, then a check digit is appended. Running `scripts/gen_dev_certs.py --out config/certs --config config/gateway.yaml` generates certs and writes the computed SFDI directly into `gateway.yaml`. If you replace the cert, re-run the script.
+* `sfdi` is derived from the device certificate
+* `cert` must point to the device PEM
+* `ca_dir` must contain the trusted CA certificate(s)
+* `pin` is only needed if in-band registration is required by the server 
 
----
+### `server`
 
-## `server`
+The `server` block defines outbound IEEE 2030.5 connection settings.
 
-Connection parameters for the IEEE 2030.5 utility server.
-
-```yaml
+```yaml id="7ocbck"
 server:
   interface: "eth0"
   uri: "https://192.168.1.100/sep2"
   command: "all"
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `interface` | string | yes | Network interface to bind for outbound connections (passed to C binary). |
-| `uri` | string | yes | Base URI of the 2030.5 server. All resource paths (`/dcap`, `/edev/...`) are appended to this. |
-| `command` | string | yes | C binary operation mode: `all` (full stack), `register` (self-register only), `fsa` (function set assignments only), `metering` (metering only). Use `all` for normal operation. |
+Operational meaning:
 
----
+* `interface` is passed through to the C client
+* `uri` is the 2030.5 server base URI
+* `command` selects the C-client operation mode, with `all` as the normal setting 
 
-## `protocol`
+### `protocol`
 
-Field device connection and register map.
+The `protocol` block defines southbound communication and the register map.
 
-```yaml
+```yaml id="4qfmkj"
 protocol:
   type: modbus
   modbus:
@@ -66,93 +70,56 @@ protocol:
     port: 502
     unit_id: 1
     registers:
-      active_power:    40100
-      reactive_power:  40101
+      active_power: 40100
+      reactive_power: 40101
       max_power_limit: 40102
-      ramp_time:       40103
-      connect:         40104
-      energize:        40105
+      ramp_time: 40103
+      connect: 40104
+      energize: 40105
     reads:
-      inverter_status:     30201
-      gen_connect_status:  30202
-      state_of_charge:     30200
-      available_w:         30203
-      available_var:       30204
-      rated_w:             30300
-      rated_va:            30301
-      rated_ah:            30302
-      max_w:               30303
-      max_a:               30304
+      inverter_status: 30201
+      gen_connect_status: 30202
+      state_of_charge: 30200
+      available_w: 30203
+      available_var: 30204
+      rated_w: 30300
+      rated_va: 30301
+      rated_ah: 30302
+      max_w: 30303
+      max_a: 30304
 ```
 
-### `protocol.type`
+Current operational status:
 
-`modbus` (default). `dnp3` is planned (Phase 3) — raises `NotImplementedError` today.
+* `modbus` is implemented
+* `dnp3` is planned but currently raises `NotImplementedError`  
 
-### `protocol.modbus`
+#### `registers` write map
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `host` | string | yes | IP address or hostname of the Modbus TCP device. |
-| `port` | int | no | Modbus TCP port. Default: `502`. |
-| `unit_id` | int | no | Modbus unit (slave) ID. Default: `1`. |
+These are the holding registers written when a DER event is applied and zeroed during relinquish. If a DER control field has no mapped register, it is ignored. 
 
-### `protocol.modbus.registers` (write map)
+#### `reads` startup read map
 
-Maps semantic DER control names to Modbus holding register addresses. These registers are **written** when a DERControl event arrives and **zeroed** when the event ends (`_relinquish()`).
+These are the addresses read once at startup to populate `DERState`, which then drives XML generation. Read failures fall back to default values and do not abort startup.  
 
-| Key | DER field | Notes |
-|-----|-----------|-------|
-| `active_power` | `opModFixedW`, `opModTargetW` | Watts |
-| `reactive_power` | `opModFixedVar` | VAR |
-| `max_power_limit` | `opModMaxLimW` | Watts |
-| `ramp_time` | `rampTms` | Milliseconds |
-| `connect` | `opModConnect` | `1` = connect, `0` = disconnect |
-| `energize` | `opModEnergize` | `1` = energize |
+### `logging`
 
-Only registers explicitly listed here are written. If a DERControlBase field has no matching key in this map, it is silently ignored.
-
-### `protocol.modbus.reads` (read map)
-
-Maps semantic names to Modbus input register addresses. These registers are **read once at startup** to populate the `DERState` that drives the XML settings files sent to the server.
-
-| Key | DERState field | Used in |
-|-----|----------------|---------|
-| `inverter_status` | `inverterStatus` | DERStatus.xml |
-| `gen_connect_status` | `genConnectStatus` | DERStatus.xml |
-| `state_of_charge` | `stateOfCharge` | DERAvailability.xml |
-| `available_w` | `statWAvail` | DERAvailability.xml |
-| `available_var` | `statVarAvail` | DERAvailability.xml |
-| `rated_w` | `rtgW` | DERCapability.xml |
-| `rated_va` | `rtgVA` | DERCapability.xml |
-| `rated_ah` | `rtgAh` | DERCapability.xml |
-| `max_w` | `rtgMaxW` | DERCapability.xml |
-| `max_a` | `rtgMaxA` | DERCapability.xml |
-
-If a register cannot be read (device offline, address out of range), the corresponding `DERState` field falls back to a default value (typically `0` or `None`). The gateway does not abort startup on individual read failures.
-
----
-
-## `logging`
-
-```yaml
+```yaml id="6exsp9"
 logging:
   level: INFO
   format: text
   file: null
 ```
 
-| Field | Values | Default | Description |
-|-------|--------|---------|-------------|
-| `level` | `DEBUG`, `INFO`, `WARNING`, `ERROR` | `INFO` | Python log level |
-| `format` | `text`, `json` | `text` | `text` for human-readable output; `json` for structured log ingestion (one JSON object per line) |
-| `file` | path or `null` | `null` | If set, also write logs to this file in addition to stderr |
+Supported behavior:
 
----
+* `level` controls Python logging verbosity
+* `format` can be `text` or `json`
+* `file` optionally duplicates output to a file path 
 
-## Full Example
+## Full example config
 
-```yaml
+```yaml id="m9glh0"
 device:
   sfdi: "320841683177"
   cert: "config/certs/device.pem"
@@ -171,23 +138,23 @@ protocol:
     port: 502
     unit_id: 1
     registers:
-      active_power:    40100
-      reactive_power:  40101
+      active_power: 40100
+      reactive_power: 40101
       max_power_limit: 40102
-      ramp_time:       40103
-      connect:         40104
-      energize:        40105
+      ramp_time: 40103
+      connect: 40104
+      energize: 40105
     reads:
-      inverter_status:     30201
-      gen_connect_status:  30202
-      state_of_charge:     30200
-      available_w:         30203
-      available_var:       30204
-      rated_w:             30300
-      rated_va:            30301
-      rated_ah:            30302
-      max_w:               30303
-      max_a:               30304
+      inverter_status: 30201
+      gen_connect_status: 30202
+      state_of_charge: 30200
+      available_w: 30203
+      available_var: 30204
+      rated_w: 30300
+      rated_va: 30301
+      rated_ah: 30302
+      max_w: 30303
+      max_a: 30304
 
 logging:
   level: INFO

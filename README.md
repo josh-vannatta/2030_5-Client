@@ -1,44 +1,106 @@
 # IEEE 2030.5 DER Gateway
 
-A Python integration layer that bridges an IEEE 2030.5 utility server to field devices via Modbus TCP or DNP3. The Python layer manages configuration, device state, and field protocol communication. The [EPRI IEEE 2030.5 Client](https://github.com/epri-dev/IEEE-2030.5-Client) handles the 2030.5 protocol (HTTP/TLS, EXI/XML, event scheduling, and server communication).
+A two-process gateway that bridges an IEEE 2030.5 utility server to field devices over Modbus TCP today and DNP3 later. The Python gateway owns configuration, field-device reads/writes, XML generation, subprocess lifecycle, and runtime control translation, while the EPRI `client_test` C binary owns the 2030.5 wire protocol, TLS, EXI, resource traversal, and DERControl scheduling. :contentReference[oaicite:0]{index=0} :contentReference[oaicite:1]{index=1}
 
 ## Architecture
 
-```
+```text
 [Utility / Aggregator Server]
-        ↕ IEEE 2030.5  (HTTPS + EXI/XML)
- ┌─────────────────────────────────┐
- │  core/build/client_test  │  ← compiled C binary (EPRI)
- │  emits EVENT_JSON: to stdout    │
- └──────────────┬──────────────────┘
-                │ JSON events (stdout pipe)
- ┌──────────────▼──────────────────┐
- │  gateway/  (Python)             │
- │  config · client · bridge       │
- │  device · settings · log        │
- └──────────────┬──────────────────┘
-                │ Modbus TCP / DNP3
- ┌──────────────▼──────────────────┐
- │  RTU / Inverter / Battery       │
- └─────────────────────────────────┘
+        ↕ IEEE 2030.5 (HTTPS + EXI/XML)
+┌──────────────────────────────────────┐
+│ core/build/client_test               │  ← compiled C binary (EPRI)
+│ owns 2030.5 stack                    │
+│ emits EVENT_JSON: to stdout          │
+└────────────────┬─────────────────────┘
+                 │ JSON events (stdout pipe)
+┌────────────────▼─────────────────────┐
+│ gateway/ (Python)                    │
+│ config · client · bridge             │
+│ device · settings · log              │
+│ protocols/modbus · protocols/dnp3    │
+└────────────────┬─────────────────────┘
+                 │ Modbus TCP / DNP3
+┌────────────────▼─────────────────────┐
+│ RTU / Inverter / Battery / DER       │
+└──────────────────────────────────────┘
+````
+
+The system has two hard boundaries:
+
+* **Northbound:** IEEE 2030.5 utility server
+* **Southbound:** field device over Modbus TCP today, with DNP3 planned later 
+
+### Responsibilities
+
+**C client (`core/build/client_test`)**
+
+* mutual-auth TLS
+* EXI encoding/decoding
+* 2030.5 resource discovery and traversal
+* DERControl scheduling
+* certificate-based device identity 
+
+**Python gateway (`gateway/`)**
+
+* config loading and validation
+* startup device-state reads
+* XML generation for 2030.5 settings
+* subprocess management
+* `EVENT_JSON:` parsing
+* DERControl-to-register translation
+* active register tracking and relinquish behavior 
+
+## What it does
+
+At startup, the gateway loads `gateway.yaml`, validates config and certificate paths, connects to the field device, reads a startup telemetry snapshot, writes four 2030.5 XML settings files, and then starts the C client. After that, it enters an event loop: the C client emits `EVENT_JSON:` lines on stdout, and the Python bridge translates those DERControl events into field-protocol register writes.  
+
+In short:
+
+* **Northbound:** field-device reads → `DERState` → XML files → C client → 2030.5 server 
+* **Southbound:** server DERControl → C scheduling → `EVENT_JSON:` → Python bridge → Modbus register writes 
+
+## Runtime lifecycle
+
+The gateway runs through four phases:
+
+1. **INIT** — load config, configure logging, build the bridge
+2. **STARTUP** — connect protocol, read device state, write XML, spawn C client
+3. **EVENT LOOP** — parse `EVENT_JSON:` and apply `start`, `end`, or `default_control`
+4. **TEARDOWN** — stop subprocess and disconnect protocol adapter 
+
+### Startup sequence
+
+```text
+load config
+  → connect field protocol
+  → read device registers
+  → build DERState
+  → write settings XML
+  → spawn client_test
+  → 2030.5 resource discovery
+  → subscribe to DERControl
+  → EVENT_JSON loop
+  → write field registers on DER events
 ```
+
+One important runtime detail: the XML settings files are written **once at startup**. They are not continuously refreshed in the current implementation. Another important caveat: if the gateway crashes mid-event, the device keeps the last written setpoints; registers are not automatically relinquished on crash.  
 
 ## Prerequisites
 
-| Dependency | Version | Notes |
-|---|---|---|
-| Python | ≥ 3.11 | |
-| uv | any | `pip install uv` or `brew install uv` |
-| GCC | ≥ 4.6 | Linux only — C code uses `epoll` |
-| OpenSSL | ≥ 1.1.0 | `libssl-dev` on Ubuntu |
-| make | any | |
-| Docker | any | Required on macOS (no native Linux build) |
+| Dependency | Version | Notes                                 |
+| ---------- | ------- | ------------------------------------- |
+| Python     | ≥ 3.11  |                                       |
+| uv         | any     | `pip install uv` or `brew install uv` |
+| GCC        | ≥ 4.6   | Linux only — C client uses `epoll`    |
+| OpenSSL    | ≥ 1.1.0 | `libssl-dev` on Ubuntu                |
+| make       | any     |                                       |
+| Docker     | any     | Required on macOS                     |
 
-> **macOS**: The C client uses Linux-specific `epoll` and cannot compile or run natively. Use Docker or the VS Code Dev Container.
+The C client is Linux-only because it uses `epoll`; on macOS, use Docker or the VS Code Dev Container.  
 
----
+## Quickstart
 
-## Quickstart — Docker (macOS or Linux)
+### Docker (macOS or Linux)
 
 ```bash
 # 1. Clone
@@ -47,11 +109,11 @@ git clone <this-repo> && cd 2030_5-client
 # 2. Generate dev certificates (computes SFDI, updates gateway.yaml)
 uv run scripts/gen_dev_certs.py --out config/certs --config config/gateway.yaml
 
-# 3. Edit config for your server and device
+# 3. Copy and edit config for your server and device
 cp config/gateway.yaml config/my-gateway.yaml
-# Edit: server.uri, server.interface, protocol.modbus.host, reads.*
+# Edit: server.uri, server.interface, protocol.modbus.host, protocol.modbus.reads.*
 
-# 4. Build image and run
+# 4. Build and run
 docker build -t gateway .
 docker run --rm -it \
   --network host \
@@ -59,21 +121,15 @@ docker run --rm -it \
   gateway --config /app/config/my-gateway.yaml
 ```
 
----
+### VS Code Dev Container
 
-## VS Code Dev Container
+The repo ships with `.devcontainer/`. Open the project in VS Code and choose **Dev Containers: Reopen in Container**. On first open it will:
 
-The repo ships with a `.devcontainer/` configuration. Open the project in VS Code and choose **Dev Containers: Reopen in Container**. On first open it will:
+1. build the Docker image
+2. compile the C client
+3. install Python dependencies with `uv`  
 
-1. Build the Docker image (Ubuntu 24.04 + gcc + OpenSSL + Python + uv)
-2. Compile the C client inside the container (`make clean && make`)
-3. Install all Python dependencies (`uv sync --all-groups`)
-
-Inside the container the full stack runs natively — the C binary is arm64 Linux, matching the container OS.
-
----
-
-## Native Linux Build
+### Native Linux
 
 ```bash
 # 1. System dependencies (Ubuntu / Debian)
@@ -83,11 +139,11 @@ sudo apt-get install gcc libc6-dev make libssl-dev python3 python3-pip curl
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # 3. Build the C client
-cd core && make    # → build/client_test
+cd core && make
 cd ..
 
-# 4. Install Python package
-uv sync --all-groups      # creates .venv, installs all deps
+# 4. Install Python deps
+uv sync --all-groups
 
 # 5. Generate dev certs (first time only)
 uv run scripts/gen_dev_certs.py --out config/certs --config config/gateway.yaml
@@ -99,16 +155,16 @@ uv run python -m gateway --dry-run
 uv run python -m gateway
 ```
 
----
+These are the supported setup paths today. 
 
 ## Configuration
 
-`config/gateway.yaml` is the single config file. Secrets can be injected via environment variables:
+All runtime configuration lives in `config/gateway.yaml` by default. Secrets and identity values can also be overridden with environment variables. 
 
-| Env var | Config key |
-|---|---|
+| Env var        | Config key    |
+| -------------- | ------------- |
 | `GATEWAY_SFDI` | `device.sfdi` |
-| `GATEWAY_PIN` | `device.pin` |
+| `GATEWAY_PIN`  | `device.pin`  |
 | `GATEWAY_CERT` | `device.cert` |
 
 ### Key fields
@@ -118,7 +174,7 @@ device:
   sfdi: "320841683177"               # Derived from cert — run gen_dev_certs.py
   cert: "config/certs/device.pem"
   ca_dir: "config/certs/ca/"
-  pin: "111115"                      # In-band registration PIN (optional)
+  pin: "111115"                      # Optional in-band registration PIN
 
 server:
   interface: "eth0"
@@ -131,14 +187,14 @@ protocol:
     host: "192.168.1.200"
     port: 502
     unit_id: 1
-    registers:                       # Control outputs (written on DER events)
+    registers:                       # Control outputs written on DER events
       active_power: 40100
       reactive_power: 40101
       max_power_limit: 40102
       ramp_time: 40103
       connect: 40104
       energize: 40105
-    reads:                           # Telemetry inputs (read at startup)
+    reads:                           # Telemetry inputs read at startup
       inverter_status: 30201
       gen_connect_status: 30202
       state_of_charge: 30200
@@ -155,160 +211,106 @@ logging:
   format: text                       # text | json
 ```
 
----
+The SFDI is derived from the device certificate rather than chosen arbitrarily. `scripts/gen_dev_certs.py` generates dev certs, computes the SFDI, and writes it back to `gateway.yaml`.  
 
-## Project Structure
+## Project structure
 
-```
+```text
 2030_5-client/
 ├── core/                  # EPRI C client (modified)
-│   ├── Makefile                  # Linux build (replaces bash4-dependent build.sh)
-│   ├── der_client.c              # patched: emits EVENT_JSON: lines on DER events
-│   └── build/client_test         # compiled binary (after make)
+│   ├── Makefile           # Linux build
+│   ├── der_client.c       # patched: emits EVENT_JSON lines
+│   └── build/client_test  # compiled binary
 │
-├── gateway/                      # Python package
-│   ├── __main__.py               # entry point: python -m gateway
-│   ├── config.py                 # YAML loading, validation, RegisterMap, ReadMap
-│   ├── client.py                 # subprocess wrapper — spawns binary, yields events
-│   ├── bridge.py                 # DERControl events → field protocol writes
-│   ├── device.py                 # reads live device state from field protocol
-│   ├── settings.py               # generates settings/*.xml from DERState
-│   ├── log.py                    # structured logging (text or JSON)
+├── gateway/               # Python package
+│   ├── __main__.py        # entry point: python -m gateway
+│   ├── config.py          # YAML loading, validation, RegisterMap, ReadMap
+│   ├── client.py          # subprocess wrapper, EVENT_JSON parsing
+│   ├── bridge.py          # DERControl events -> field protocol writes
+│   ├── device.py          # reads live device state from field protocol
+│   ├── settings.py        # generates 2030.5 settings XML from DERState
+│   ├── log.py             # structured logging
 │   └── protocols/
-│       ├── __init__.py           # FieldProtocol abstract base
-│       ├── modbus.py             # pymodbus TCP adapter
-│       └── dnp3.py               # DNP3 stub (Phase 4)
+│       ├── __init__.py    # FieldProtocol abstraction
+│       ├── modbus.py      # pymodbus TCP adapter
+│       └── dnp3.py        # DNP3 stub
 │
 ├── tests/
-│   ├── conftest.py               # shared fixtures
-│   ├── test_config.py
-│   ├── test_bridge.py
-│   ├── test_client.py
-│   ├── test_device.py
-│   ├── test_settings.py
-│   └── protocols/
-│       └── test_modbus.py
-│
 ├── scripts/
-│   └── gen_dev_certs.py          # generate ECDSA P-256 dev certs + compute SFDI
-│
 ├── config/
-│   ├── gateway.yaml              # example configuration
-│   └── certs/                    # certificate storage (gitignored)
-│       ├── device.pem            # device cert + private key
-│       └── ca/ca.pem             # trusted CA certificate
-│
 ├── .devcontainer/
-│   └── devcontainer.json         # VS Code Dev Container config
-├── Dockerfile                    # Linux build env + runtime
-├── pyproject.toml                # Python package + uv dependency groups
-└── uv.lock                       # pinned dependency lockfile
+├── Dockerfile
+├── pyproject.toml
+└── uv.lock
 ```
 
----
+This structure matches the current separation of responsibilities in both the Python package and the modified C client.  
 
-## Running Tests
+## Running tests
+
+Tests are fully mocked. No hardware, no running 2030.5 server, and no live C binary are required.
 
 ```bash
-uv run pytest          # all 62 tests, no hardware required
-uv run pytest -v -k bridge   # run a specific module
+uv run pytest
+uv run pytest -v
+uv run pytest -v -k bridge
 ```
 
----
+The current test suite is organized under `tests/`. 
 
-## Development Phases
+## Current status
 
-### Phase 0 — Foundation
+### Implemented now
 
-Everything needed to go from zero to a structurally complete gateway.
+* config loading and validation
+* Modbus adapter
+* startup device reads
+* XML generation
+* subprocess lifecycle management
+* `EVENT_JSON` parsing
+* DERControl event translation
+* active register tracking and relinquish on `end`
+* mocked test coverage  
 
-| What | Files | Notes |
-|---|---|---|
-| **Linux build** | [core/Makefile](core/Makefile) | Replaces the bash 4-only `build.sh`; works with gcc/clang |
-| **C patch** | [core/der_client.c](core/der_client.c) | Added `EVENT_JSON:` stdout lines for `start`, `end`, `default_control` events; Python reads these |
-| **Config** | [gateway/config.py](gateway/config.py) | Typed dataclasses; YAML load + env var overrides; validates cert paths at startup |
-| **Subprocess wrapper** | [gateway/client.py](gateway/client.py) | Spawns `client_test`, reads stdout line-by-line, yields parsed JSON dicts |
-| **Bridge** | [gateway/bridge.py](gateway/bridge.py) | Maps `DERControlBase` fields to Modbus register writes; tracks active registers for relinquish |
-| **DER settings XML** | [gateway/settings.py](gateway/settings.py) | Generates `DERCapability`, `DERSettings`, `DERStatus`, `DERAvailability` XML from a `DERState` dataclass |
-| **Device state read** | [gateway/device.py](gateway/device.py) | Reads live telemetry from field device at startup; populates `DERState` for settings XML |
-| **Modbus adapter** | [gateway/protocols/modbus.py](gateway/protocols/modbus.py) | pymodbus TCP wrapper behind the `FieldProtocol` abstract interface |
-| **DNP3 stub** | [gateway/protocols/dnp3.py](gateway/protocols/dnp3.py) | Raises `NotImplementedError` — placeholder for Phase 4 |
-| **Entry point** | [gateway/__main__.py](gateway/__main__.py) | Startup sequence: connect protocol → read device state → write XML → launch C binary → event loop |
-| **Logging** | [gateway/log.py](gateway/log.py) | `text` or `json` format; optional file output |
-| **Dev certs** | [scripts/gen_dev_certs.py](scripts/gen_dev_certs.py) | Generates ECDSA P-256 self-signed CA + device cert; computes SFDI from PEM bytes (matches C algorithm); auto-updates `gateway.yaml` |
-| **Docker** | [Dockerfile](Dockerfile) | Ubuntu 24.04; gcc + OpenSSL + uv; works as both production image and Dev Container base |
-| **Dev Container** | [.devcontainer/devcontainer.json](.devcontainer/devcontainer.json) | Compiles C binary and installs Python deps on first open; arm64-aware |
-| **Tests** | [tests/](tests/) | 62 tests; all mocked — no hardware or running server required |
+### Not implemented yet
 
-**Startup sequence (Phase 0 complete):**
-```
-load config → connect Modbus → read device registers → write settings XML
-  → spawn client_test → EVENT_JSON loop → write Modbus registers on DER events
-```
+* live telemetry updates after startup
+* meter readings from actual device values
+* process supervision and restart after C-client crash
+* DNP3 implementation
+* OpenFMB / MQTT / NATS integration
+* richer notification / subscription / event-response flows 
 
-**What Phase 0 does NOT do:**
-- Live telemetry updates after startup (DERStatus/Availability are static after launch)
-- Meter readings from the device (C code uses hardcoded values)
-- Process supervision / restart on C binary crash
-- OpenFMB / DNP3 / Modbus Masters
-  - MQTT support (DNP3 / Modbus config)
-  - NATS support (for OpenFMB)
-- Telemetry, Metering, Periodic Polling
-- Notification, Subscription
-- DERControl or Event -> Response
+### Proposed next phases
 
----
+* periodic telemetry polling and live DERStatus / DERAvailability updates
+* live meter reads and `MirrorMeterReading`
+* resilience features like process restart and reconnect
+* DNP3 adapter implementation  
 
-### Phase 1 — Live Telemetry *(proposal)*
+## How the C patch works
 
-- Periodic Modbus poll → PUT updated `DERStatus` / `DERAvailability` directly to server
-- Live meter reads → POST `MirrorMeterReading` from actual device values
-- Process restart loop with exponential backoff
+`core/der_client.c` emits one `EVENT_JSON:` line per DER event transition. The Python side reads stdout line-by-line and yields parsed dicts for any line that starts with `EVENT_JSON:`. This is the only C→Python IPC channel in the current design.  
 
-### Phase 2 — Resilience *(proposal)*
+Example:
 
-- C process supervision and restart
-- Modbus auto-reconnect
-- Health check HTTP endpoint
-
-### Phase 3 — DNP3 or OpenFMB *(proposal)*
-
-- Implement `Dnp3Adapter` using `pydnp3` or equivalent
-
----
-
-## How the C Patch Works
-
-`core/der_client.c` emits one `EVENT_JSON:` line per DER event transition:
-
-```
-EVENT_JSON:{"type":"start","sfdi":320841683177,"mrid":"0102...","description":"Curtail 50%","control":{"opModFixedW":-50,"rampTms":100}}
-EVENT_JSON:{"type":"end","sfdi":320841683177,"mrid":"0102...","description":"Curtail 50%"}
-EVENT_JSON:{"type":"default_control","sfdi":320841683177,"description":"Default","control":{"opModFixedW":0}}
+```text
+EVENT_JSON:{"type":"start","mrid":"abc123","start":1700000000,"duration":900,"control":{"opModFixedW":8000,"rampTms":60}}
+EVENT_JSON:{"type":"end","mrid":"abc123"}
+EVENT_JSON:{"type":"default_control","control":{"opModMaxLimW":10000,"opModConnect":true}}
 ```
 
-`gateway/client.py` reads stdout line-by-line and yields parsed dicts for lines starting with `EVENT_JSON:`. All other C output (connection status, schedule prints) goes to stderr as plain debug text.
+## Documentation
 
----
-
-## How SFDI is Computed
-
-The SFDI is derived from the device certificate file — it is **not** arbitrary. The C binary computes it from the raw PEM bytes:
-
-```python
-sha256(pem_bytes)[:20]    # → LFDI (20 bytes)
-lfdi[:5] >> 4             # → 36-bit value
-value * 10 + check_digit  # → SFDI (decimal, with check digit)
-```
-
-`scripts/gen_dev_certs.py` runs this same algorithm in Python after generating the cert, and writes the result to `gateway.yaml`. If you regenerate certs you must re-run the script — the SFDI will change.
-
----
+* `README.md` — overview, quickstart, repo map
+* `docs/architecture.md` — system boundaries, process model, IPC, data flows
+* `docs/operations.md` — lifecycle, runtime state, configuration, failure behavior
+* `docs/development.md` — setup, testing, certificates, extension workflow
 
 ## References
 
-- [EPRI IEEE 2030.5 Client](https://github.com/epri-dev/IEEE-2030.5-Client)
-- [IEEE 2030.5 Standard](https://standards.ieee.org/standard/2030_5-2018.html)
-- [CSIP (Common Smart Inverter Profile)](https://sunspec.org/csip/)
-- [pymodbus documentation](https://pymodbus.readthedocs.io/)
-- [uv documentation](https://docs.astral.sh/uv/)
+* [EPRI IEEE 2030.5 Client](https://github.com/epri-dev/IEEE-2030.5-Client)
+* [IEEE 2030.5 Standard](https://standards.ieee.org/standard/2030_5-2018.html)
+* [CSIP (Common Smart Inverter Profile)](https://sunspec.org/csip/)
+* [pymodbus documentation](https://pymodbus.readthedocs.io/)
+* [uv documentation](https://docs.astral.sh/uv/)

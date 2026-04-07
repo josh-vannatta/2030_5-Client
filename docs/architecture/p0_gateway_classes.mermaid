@@ -1,0 +1,166 @@
+classDiagram
+
+    %% ── Exceptions ──────────────────────────────────────────────────────────
+    class EpriClientError {
+        <<exception>>
+    }
+    RuntimeError <|-- EpriClientError
+
+    %% ── Logging ─────────────────────────────────────────────────────────────
+    class _JsonFormatter {
+        +format(record: LogRecord) str
+    }
+    Formatter <|-- _JsonFormatter
+
+    %% ── Config dataclasses ──────────────────────────────────────────────────
+    class RegisterMap {
+        <<dataclass>>
+        +active_power: int
+        +reactive_power: int
+        +max_power_limit: int
+        +ramp_time: int
+        +connect: int
+        +energize: int
+    }
+
+    class ReadMap {
+        <<dataclass>>
+        +inverter_status: int | None
+        +gen_connect_status: int | None
+        +state_of_charge: int | None
+        +available_w: int | None
+        +available_var: int | None
+        +rated_w: int | None
+        +rated_va: int | None
+        +rated_ah: int | None
+        +max_w: int | None
+        +max_a: int | None
+        +active_power_output: int | None
+        +reactive_power_output: int | None
+        +energy_delivered_wh: int | None
+    }
+
+    class ModbusConfig {
+        <<dataclass>>
+        +host: str
+        +port: int
+        +unit_id: int
+        +timeout: float
+        +registers: RegisterMap
+        +reads: ReadMap
+    }
+    ModbusConfig *-- RegisterMap : registers
+    ModbusConfig *-- ReadMap : reads
+
+    class Dnp3Config {
+        <<dataclass>>
+        +host: str
+        +port: int
+        +master_address: int
+        +outstation_address: int
+    }
+
+    class LogConfig {
+        <<dataclass>>
+        +level: str
+        +format: Literal["json","text"]
+        +file: str | None
+    }
+
+    class Config {
+        <<dataclass>>
+        +interface: str
+        +server_uri: str
+        +cert: str
+        +ca_dir: str
+        +sfdi: str
+        +command: str
+        +pin: str | None
+        +protocol: Literal["modbus","dnp3"]
+        +modbus: ModbusConfig | None
+        +dnp3: Dnp3Config | None
+        +log: LogConfig
+        +validate() None
+    }
+    Config *-- ModbusConfig : modbus
+    Config *-- Dnp3Config : dnp3
+    Config *-- LogConfig : log
+
+    %% ── Device state ────────────────────────────────────────────────────────
+    class DERState {
+        <<dataclass>>
+        +rtg_w: int
+        +rtg_va: int
+        +rtg_ah: int
+        +set_max_w: int
+        +set_max_a: int
+        +set_es_high_volt: int
+        +set_es_low_volt: int
+        +inverter_status: int
+        +state_of_charge: int
+        +gen_connect_status: int
+        +stat_w_avail: int
+        +stat_var_avail: int
+    }
+
+    %% ── Field-protocol abstraction ──────────────────────────────────────────
+    class FieldProtocol {
+        <<abstract>>
+        +connect() None*
+        +disconnect() None*
+        +write_register(address: int, value: int) None*
+        +read_register(address: int) int*
+        +__enter__() FieldProtocol
+        +__exit__(*_) None
+    }
+
+    class ModbusAdapter {
+        +cfg: ModbusConfig
+        -_client: ModbusTcpClient | None
+        +connect() None
+        +disconnect() None
+        +write_register(address: int, value: int) None
+        +read_register(address: int) int
+        -_require_connected() None
+    }
+    FieldProtocol <|-- ModbusAdapter
+    ModbusAdapter *-- ModbusConfig : cfg
+
+    class Dnp3Adapter {
+        +cfg: Dnp3Config
+        +connect() None
+        +disconnect() None
+        +write_register(address: int, value: int) None
+        +read_register(address: int) int
+    }
+    FieldProtocol <|-- Dnp3Adapter
+    Dnp3Adapter *-- Dnp3Config : cfg
+
+    %% ── Bridge ──────────────────────────────────────────────────────────────
+    class DERBridge {
+        +protocol: FieldProtocol
+        +registers: RegisterMap
+        -_active_registers: dict
+        +apply(event: dict) None
+        -_apply_control(control: dict) None
+        -_relinquish() None
+        -_write(address: int, value: int) None
+    }
+    DERBridge *-- FieldProtocol : protocol
+    DERBridge *-- RegisterMap : registers
+
+    %% ── Client ──────────────────────────────────────────────────────────────
+    class EpriClient {
+        +config: Config
+        +binary: Path
+        +EVENT_PREFIX: str
+        -_proc: Popen | None
+        +start() None
+        +stop() None
+        +events() Iterator~dict~
+        +__enter__() EpriClient
+        +__exit__(*_) None
+        -_build_args() list~str~
+    }
+    EpriClient *-- Config : config
+    EpriClient ..> EpriClientError : raises

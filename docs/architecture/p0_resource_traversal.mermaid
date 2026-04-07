@@ -1,0 +1,56 @@
+graph TD
+    classDef implStyle    fill:#2d6a4f,color:#fff,stroke:#1b4332
+    classDef partialStyle fill:#b5850a,color:#fff,stroke:#7d5a0a
+    classDef plannedStyle fill:#4a4a4a,color:#ddd,stroke:#333
+
+    subgraph DISC["Discovery / Registration"]
+        direction LR
+        DCAP["GET /dcap\nDeviceCapability"]:::implStyle
+        TIME["GET /tm\nTime"]:::implStyle
+        EDEV["GET /edev/{sfdi}\nEndDevice"]:::implStyle
+        REG["POST /edev\nRegistration"]:::partialStyle
+
+        DCAP -->|"1"| TIME
+        DCAP -->|"2"| EDEV
+        EDEV -->|"3 (if needed)"| REG
+    end
+
+    subgraph CTRL["Program / Control"]
+        direction LR
+        FSA["GET /edev/{sfdi}/fsa\nFunctionSetAssignments"]:::implStyle
+        DERP["GET /edev/{sfdi}/fsa/derp\nDERProgramList"]:::implStyle
+        DERC_DEF["GET .../dderc\nDefaultDERControl"]:::partialStyle
+        DERC["GET .../derc\nDERControlList"]:::implStyle
+        DERC_ITEM["DERControl\nmrid · start · duration\nDERControlBase"]:::implStyle
+        SUB["POST .../derc/sub\nSubscription"]:::partialStyle
+
+        FSA -->|"6"| DERP
+        DERP -->|"7"| DERC_DEF
+        DERP -->|"8"| DERC
+        DERC -->|"9 (each)"| DERC_ITEM
+        DERC -->|"10"| SUB
+    end
+
+    subgraph DER["DER Resource / Telemetry"]
+        direction LR
+        DER_REG["GET /edev/{sfdi}/der/1\nDER resource"]:::implStyle
+        DERCAP["PUT .../dercap\nDERCapability"]:::implStyle
+        DERS["PUT .../ders\nDERSettings"]:::implStyle
+        DERST["PUT .../derst\nDERStatus"]:::implStyle
+        DERA["PUT .../dera\nDERAvailability"]:::implStyle
+        MUP["POST /mup\nMirrorUsagePoint"]:::partialStyle
+        MR["POST /mup/{id}/mr\nMirrorMeterReading"]:::plannedStyle
+
+        DER_REG -->|"11"| DERCAP
+        DER_REG -->|"12"| DERS
+        DER_REG -->|"13"| DERST
+        DER_REG -->|"14"| DERA
+        MUP -->|"16"| MR
+    end
+
+    EDEV -->|"4"| FSA
+    EDEV -->|"5"| DER_REG
+    DCAP -->|"15"| MUP
+
+    DISC --> CTRL
+    CTRL --> DER
