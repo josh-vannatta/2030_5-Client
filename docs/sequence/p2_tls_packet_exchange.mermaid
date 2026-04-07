@@ -1,0 +1,29 @@
+sequenceDiagram
+    autonumber
+    participant C   as C Binary<br/>(ECDSA P-256 client cert)
+    participant SRV as 2030.5 Server<br/>(ECDSA P-256 server cert)
+
+    Note over C,SRV: TLS 1.2 — RFC 5246<br/>cipher: TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8  (IEEE 2030.5 §10.2)
+
+    C   ->> SRV: ClientHello<br/>cipher_suites: [TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8]<br/>supported_groups: [secp256r1]
+
+    SRV -->> C: ServerHello<br/>selected: TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8
+
+    SRV -->> C: Certificate (server ECDSA P-256 chain)
+
+    SRV -->> C: ServerKeyExchange<br/>ECDHE ephemeral key (secp256r1)
+
+    SRV -->> C: CertificateRequest + ServerHelloDone
+
+    C   ->> SRV: Certificate (device ECDSA P-256, SFDI in Subject)
+
+    C   ->> SRV: ClientKeyExchange<br/>ECDHE ephemeral key (secp256r1)
+
+    C   ->> SRV: CertificateVerify<br/>signature over handshake transcript
+
+    Note over C,SRV: derive session keys from ECDHE shared secret
+
+    C   ->> SRV: ChangeCipherSpec + Finished
+    SRV -->> C: ChangeCipherSpec + Finished
+
+    Note over C,SRV: session established — AES-128-CCM-8

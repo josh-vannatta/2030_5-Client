@@ -1,0 +1,39 @@
+sequenceDiagram
+    autonumber
+    participant SRV  as 2030.5 Server
+    participant C    as C Binary
+    participant PY   as Python Bridge
+    participant MB   as Modbus Device
+
+    Note over SRV,C: event delivery (poll or notification)
+
+    SRV ->> C: DERControl {mrid, start, duration, DERControlBase}
+    C   ->> C: schedule at start_time
+
+    Note over C,PY: EVENT_START
+
+    C   ->> PY: EVENT_JSON: {type:start, mrid:abc123,<br/>duration:900, control:{opModFixedW:8000, rampTms:60}}
+
+    PY  ->> PY: bridge.apply(event) → RegisterMap
+
+    PY  ->> MB: write_register(40100, 8000)   # active_power
+    MB  -->> PY: ok
+    PY  ->> MB: write_register(40103, 60)     # ramp_time
+    MB  -->> PY: ok
+    Note over PY: _active_registers = {40100:8000, 40103:60}
+
+    rect rgb(40, 80, 60)
+        Note over SRV,MB: ... 900 seconds ...
+    end
+
+    Note over C,PY: EVENT_END
+
+    C   ->> PY: EVENT_JSON: {type:end, mrid:abc123}
+
+    PY  ->> PY: bridge._relinquish()
+
+    loop for each address in _active_registers
+        PY  ->> MB: write_register(address, 0)
+        MB  -->> PY: ok
+    end
+    Note over PY: _active_registers = {}

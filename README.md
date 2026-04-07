@@ -250,23 +250,28 @@ load config → connect Modbus → read device registers → write settings XML
 - Live telemetry updates after startup (DERStatus/Availability are static after launch)
 - Meter readings from the device (C code uses hardcoded values)
 - Process supervision / restart on C binary crash
-- DNP3
+- OpenFMB / DNP3 / Modbus Masters
+  - MQTT support (DNP3 / Modbus config)
+  - NATS support (for OpenFMB)
+- Telemetry, Metering, Periodic Polling
+- Notification, Subscription
+- DERControl or Event -> Response
 
 ---
 
-### Phase 1 — Live Telemetry *(planned)*
+### Phase 1 — Live Telemetry *(proposal)*
 
 - Periodic Modbus poll → PUT updated `DERStatus` / `DERAvailability` directly to server
 - Live meter reads → POST `MirrorMeterReading` from actual device values
 - Process restart loop with exponential backoff
 
-### Phase 2 — Resilience *(planned)*
+### Phase 2 — Resilience *(proposal)*
 
 - C process supervision and restart
 - Modbus auto-reconnect
 - Health check HTTP endpoint
 
-### Phase 3 — DNP3 *(planned)*
+### Phase 3 — DNP3 or OpenFMB *(proposal)*
 
 - Implement `Dnp3Adapter` using `pydnp3` or equivalent
 

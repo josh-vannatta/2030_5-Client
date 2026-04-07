@@ -1,0 +1,71 @@
+graph LR
+    classDef implStyle    fill:#2d6a4f,color:#fff,stroke:#1b4332
+    classDef partialStyle fill:#b5850a,color:#fff,stroke:#7d5a0a
+    classDef plannedStyle fill:#4a4a4a,color:#ddd,stroke:#333
+    classDef fileStyle    fill:#1a3a5c,color:#fff,stroke:#0d2137
+    classDef extStyle     fill:#3b1f5e,color:#fff,stroke:#1e0f33
+
+    subgraph entry["Entry Point"]
+        MAIN["__main__.py"]:::implStyle
+    end
+
+    subgraph config["Configuration"]
+        CFG["config.py\nGatewayConfig · ModbusConfig\nRegisterMap · ReadMap"]:::implStyle
+        YAML["config/gateway.yaml"]:::fileStyle
+    end
+
+    subgraph runtime["Runtime"]
+        CLIENT["client.py\nEpriClient"]:::implStyle
+        BRIDGE["bridge.py\nDERBridge"]:::implStyle
+        DEVICE["device.py\nread_device_state()"]:::implStyle
+        SETTINGS["settings.py\nwrite_settings()"]:::implStyle
+        LOG["log.py"]:::implStyle
+        TELEM["telemetry.py"]:::plannedStyle
+        METER["meter.py"]:::plannedStyle
+    end
+
+    subgraph protocols["Field Protocols"]
+        PROTO_BASE["protocols/base.py\nFieldProtocol ABC"]:::implStyle
+        MODBUS["protocols/modbus.py"]:::implStyle
+        DNP3["protocols/dnp3.py"]:::plannedStyle
+    end
+
+    subgraph cbin["C Binary"]
+        CPROC["core/build/client_test"]:::partialStyle
+    end
+
+    subgraph xmlfiles["Settings Files"]
+        XML1["core/settings/\nDERCapability.xml\nDERSettings.xml\nDERStatus.xml\nDERAvailability.xml"]:::fileStyle
+    end
+
+    subgraph ext["External"]
+        SERVER["2030.5 Server"]:::extStyle
+        FIELD["DER Device"]:::extStyle
+    end
+
+    YAML       -->|"parsed by"| CFG
+    CFG        --> MAIN
+    MAIN       --> CLIENT
+    MAIN       --> BRIDGE
+    MAIN       --> DEVICE
+    MAIN       --> SETTINGS
+    MAIN       --> LOG
+    MAIN       -.->|"Phase 2"| TELEM
+    MAIN       -.->|"Phase 2"| METER
+
+    CLIENT     -->|"spawn + pipe"| CPROC
+    CPROC      -->|"TLS/EXI"| SERVER
+    CPROC      -->|"reads"| XML1
+    SETTINGS   -->|"writes"| XML1
+
+    BRIDGE     --> PROTO_BASE
+    DEVICE     --> PROTO_BASE
+    TELEM      -.->|"Phase 2"| PROTO_BASE
+    METER      -.->|"Phase 2"| PROTO_BASE
+    PROTO_BASE --> MODBUS
+    PROTO_BASE --> DNP3
+    MODBUS     -->|"TCP :502"| FIELD
+    DNP3       -.->|"Phase 4"| FIELD
+
+    TELEM      -.->|"HTTP PUT"| SERVER
+    METER      -.->|"HTTP POST"| SERVER

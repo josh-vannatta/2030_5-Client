@@ -1,0 +1,47 @@
+graph TB
+    classDef implStyle    fill:#2d6a4f,color:#fff,stroke:#1b4332
+    classDef partialStyle fill:#b5850a,color:#fff,stroke:#7d5a0a
+    classDef plannedStyle fill:#4a4a4a,color:#ddd,stroke:#333
+
+    subgraph Utility["Utility / Aggregator"]
+        SERVER["IEEE 2030.5 Server"]:::implStyle
+    end
+
+    subgraph Gateway["Gateway"]
+        direction TB
+
+        subgraph CProc["C Binary  (core/build/client_test)"]
+            PROTO["2030.5 Stack\n(TLS · EXI · traversal)"]:::implStyle
+            SCHED["Event Scheduler"]:::implStyle
+            METER_C["Metering POST"]:::partialStyle
+        end
+
+        subgraph PyProc["Python  (gateway/)"]
+            MAIN["__main__.py"]:::implStyle
+            BRIDGE["bridge.py"]:::implStyle
+            DEVICE["device.py"]:::implStyle
+            SETTINGS["settings.py"]:::implStyle
+            CONFIG["config.py"]:::implStyle
+            TELEM["telemetry.py"]:::plannedStyle
+            METER_PY["meter.py"]:::plannedStyle
+        end
+
+        IPC["stdout pipe\nEVENT_JSON: lines"]:::implStyle
+    end
+
+    subgraph Field["Field"]
+        MODBUS["protocols/modbus.py"]:::implStyle
+        DNP3["protocols/dnp3.py"]:::plannedStyle
+        DER["DER Device"]:::implStyle
+    end
+
+    SERVER   <-->|"HTTPS + EXI\nECDSA P-256 mTLS"| PROTO
+    CProc    --> IPC
+    IPC      --> BRIDGE
+    MAIN     -->|"spawn"| CProc
+    BRIDGE   --> MODBUS
+    DEVICE   --> MODBUS
+    TELEM    -->|"PUT DERStatus/Availability"| SERVER
+    METER_PY -->|"POST MirrorMeterReading"| SERVER
+    MODBUS   <-->|"TCP :502"| DER
+    DNP3     <-->|"TCP :20000"| DER

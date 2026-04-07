@@ -1,0 +1,21 @@
+sequenceDiagram
+    autonumber
+    participant SRV  as 2030.5 Server
+    participant C    as C Binary
+    participant PY   as Python Bridge
+    participant MB   as Modbus Device
+
+    Note over SRV,C: server has DefaultDERControl configured<br/>(applies when no active event)
+
+    SRV ->> C: DefaultDERControl {DERControlBase: baseline setpoints}
+
+    C   ->> PY: EVENT_JSON: {type:default_control,<br/>control:{opModMaxLimW:10000, opModConnect:true}}
+
+    PY  ->> PY: bridge.apply(event), _active_registers.clear()
+    PY  ->> MB: write_register(40100, 10000)  # max_lim_w
+    MB  -->> PY: ok
+    PY  ->> MB: write_register(40104, 1)      # connect
+    MB  -->> PY: ok
+
+    Note over PY: _active_registers = {40100:10000, 40104:1}
+    Note over PY: stays active until superseded by higher-priority event

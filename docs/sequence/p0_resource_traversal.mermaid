@@ -1,0 +1,18 @@
+sequenceDiagram
+    autonumber
+    participant C   as C Binary
+    participant SRV as 2030.5 Server
+
+    Note over C,SRV: EXI-encoded XML over TLS 1.2<br/>cipher: TLS_ECDHE_ECDSA_WITH_AES_128_CCM_8
+
+    C   ->> SRV: GET /edev/{sfdi}/fsa/derp/{id}/derc<br/>Accept: application/sep+xml  |  mutual TLS
+
+    SRV -->> C: 200 OK<br/>Content-Type: application/sep+xml<br/>[EXI body] DERControlList
+
+    Note over C: decode EXI → DERControlList<br/>iterate controls, extract DERControlBase
+
+    C   ->> SRV: GET /edev/{sfdi}/fsa/derp/{id}/derc/{mrid}
+
+    SRV -->> C: 200 OK  [EXI body] DERControl {<br/>  mrid: "abc123"<br/>  interval: {start:1700000000, duration:900}<br/>  DERControlBase: {opModFixedW:{value:8000,multiplier:0},<br/>  rampTms:60, opModConnect:true}<br/>}
+
+    Note over C: schedule event at start_time<br/>emit: EVENT_JSON:{type:start,...}

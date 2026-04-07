@@ -1,0 +1,18 @@
+sequenceDiagram
+    autonumber
+    participant APP as Application Layer<br/>(C binary)
+    participant EXI as EXI Codec
+    participant TLS as TLS Layer
+    participant SRV as Server
+
+    Note over APP,SRV: IEEE 2030.5 uses EXI (W3C) — schema-informed compact XML<br/>schema: sep.xsd  |  body: ~50–200 bytes vs. ~500–2000 bytes text XML
+
+    APP ->> EXI: DERControl struct {mrid, interval, DERControlBase}
+
+    EXI ->> TLS: POST /edev/{sfdi}/der/1/derst<br/>Content-Type: application/sep+xml<br/>[EXI binary body]
+
+    TLS ->> SRV: [AES-128-CCM-8 encrypted]
+
+    SRV -->> TLS: 200 OK / 204 No Content
+    TLS -->> EXI: response body
+    EXI -->> APP: decoded response struct

@@ -1,0 +1,71 @@
+sequenceDiagram
+    autonumber
+    participant PY   as Python Gateway
+    participant CFG  as gateway.yaml
+    participant MB   as Modbus Device
+    participant FS   as core/settings/
+    participant CERT as config/certs/
+    participant C    as C Binary
+    participant SRV  as 2030.5 Server
+
+    Note over PY: __main__.py starts
+
+    PY  ->> CFG: load GatewayConfig
+    CFG -->> PY: host, port, cert paths, register maps
+
+    PY  ->> CERT: validate device.pem + ca/
+    CERT -->> PY: ok / ConfigError
+
+    Note over PY,MB: read device state
+
+    PY  ->> MB: connect (TCP :502)
+    MB  -->> PY: connected
+
+    loop for each ReadMap address
+        PY  ->> MB: read_register(address)
+        MB  -->> PY: value
+    end
+    Note over PY: build DERState
+
+    PY  ->> FS: write_settings(DERState) → 4 XML files
+
+    Note over PY,C: spawn C binary
+
+    PY  ->> C: spawn(client_test --config gateway.yaml)
+
+    C   ->> FS: read DERCapability/Settings/Status/Availability.xml
+    FS  -->> C: XML content
+
+    C   ->> CERT: load device.pem + CA bundle
+    CERT -->> C: ECDSA P-256 keypair
+
+    Note over C,SRV: 2030.5 resource discovery
+
+    C   ->> SRV: GET /dcap
+    SRV -->> C: DeviceCapability (edev URI, time URI)
+
+    C   ->> SRV: GET /edev/{sfdi}
+    SRV -->> C: EndDevice (fsa URI, der URI)
+
+    C   ->> SRV: GET /edev/{sfdi}/fsa
+    SRV -->> C: FunctionSetAssignments (derp URI)
+
+    C   ->> SRV: GET /edev/{sfdi}/fsa/derp
+    SRV -->> C: DERProgramList
+
+    C   ->> SRV: GET /edev/{sfdi}/fsa/derp/{id}/derc
+    SRV -->> C: DERControlList
+
+    C   ->> SRV: PUT /edev/{sfdi}/der/1/dercap
+    C   ->> SRV: PUT /edev/{sfdi}/der/1/ders
+    C   ->> SRV: PUT /edev/{sfdi}/der/1/derst
+    C   ->> SRV: PUT /edev/{sfdi}/der/1/dera
+
+    C   ->> SRV: POST /edev/{sfdi}/fsa/derp/{id}/derc/sub
+    SRV -->> C: 201 Created
+
+    Note over C,PY: steady state
+
+    SRV -->> C: DERControl notification
+    C   ->> PY: EVENT_JSON: {type:start, mrid:..., control:{...}}
+    Note over PY: bridge.apply() → write Modbus registers

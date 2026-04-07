@@ -1,0 +1,63 @@
+graph TB
+    classDef implStyle    fill:#2d6a4f,color:#fff,stroke:#1b4332
+    classDef partialStyle fill:#b5850a,color:#fff,stroke:#7d5a0a
+    classDef plannedStyle fill:#4a4a4a,color:#ddd,stroke:#333
+
+    %% ── Northbound ──────────────────────────────────────────────────────
+    subgraph NB["Northbound  (device → server)"]
+        direction LR
+        REGS_R["Modbus Read Registers"]:::implStyle
+        DERSTATE["DERState\nrtgW · rtgVA · rtgAh\nstatWAvail · stateOfCharge\ninverterStatus · ..."]:::implStyle
+        XML_CAP["DERCapability.xml"]:::implStyle
+        XML_SET["DERSettings.xml"]:::implStyle
+        XML_STAT["DERStatus.xml"]:::implStyle
+        XML_AVAIL["DERAvailability.xml"]:::implStyle
+        CBIN_READ["C binary reads XML\nat startup"]:::partialStyle
+        SERVER_N["2030.5 Server"]:::partialStyle
+
+        REGS_R    -->|"read_device_state()"| DERSTATE
+        DERSTATE  -->|"write_settings()"| XML_CAP
+        DERSTATE  -->|"write_settings()"| XML_SET
+        DERSTATE  -->|"write_settings()"| XML_STAT
+        DERSTATE  -->|"write_settings()"| XML_AVAIL
+        XML_CAP   --> CBIN_READ
+        XML_SET   --> CBIN_READ
+        XML_STAT  --> CBIN_READ
+        XML_AVAIL --> CBIN_READ
+        CBIN_READ -->|"PUT (EXI)"| SERVER_N
+    end
+
+    %% ── Southbound ──────────────────────────────────────────────────────
+    subgraph SB["Southbound  (server → device)"]
+        direction LR
+        SERVER_S["2030.5 Server"]:::implStyle
+        EVENT_JSON["EVENT_JSON: dict\n{type, mrid, start, duration,\ncontrol: {opModFixedW, ...}}"]:::implStyle
+        BRIDGE["DERBridge.apply()"]:::implStyle
+        REGMAP["RegisterMap\nactive_power: 40100\nconnect: 40104 · ..."]:::implStyle
+        ACTIVE["_active_registers\n{address → value}"]:::implStyle
+        REGS_W["Modbus Write Registers"]:::implStyle
+        DEVICE["DER Device"]:::implStyle
+
+        SERVER_S   -->|"EVENT_JSON: stdout"| EVENT_JSON
+        EVENT_JSON --> BRIDGE
+        BRIDGE     --> REGMAP
+        REGMAP     --> REGS_W
+        BRIDGE     --> ACTIVE
+        ACTIVE     -->|"_relinquish() on EVENT_END"| REGS_W
+        REGS_W     -->|"Modbus TCP"| DEVICE
+    end
+
+    %% ── Phase 2 ─────────────────────────────────────────────────────────
+    subgraph PH2["Phase 2  (planned)"]
+        direction LR
+        POLL["Telemetry Poller\n30s interval"]:::plannedStyle
+        DERSTATE2["DERState (live)"]:::plannedStyle
+        PUT["PUT DERStatus\nDERAvailability"]:::plannedStyle
+        POST["POST MirrorMeterReading"]:::plannedStyle
+        REGS_R2["Modbus Reads"]:::plannedStyle
+
+        REGS_R2   --> POLL
+        POLL      --> DERSTATE2
+        DERSTATE2 --> PUT
+        DERSTATE2 --> POST
+    end
