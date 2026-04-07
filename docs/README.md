@@ -9,6 +9,8 @@ Reference documentation for the IEEE 2030.5 DER Gateway.
 | [architecture.md](architecture.md) | System design, process boundary, data flows, phase roadmap |
 | [configuration.md](configuration.md) | Full `gateway.yaml` reference — all fields, types, register maps |
 | [development.md](development.md) | Dev setup, build, test workflow, extending protocols |
+| [gateway.md](gateway.md) | Gateway project, model descriptions, register writing |
+| [lifecycle.md](lifecycle.md) | Core gateway lifecycle / interaction |
 
 ---
 
