@@ -153,10 +153,9 @@ The following diagrams cover the northbound protocol stack below the Python/C bo
 | [07_tls_packet_exchange.mermaid](sequence/07_tls_packet_exchange.mermaid) | Full TLS 1.2 mutual-auth handshake: ClientHello → CertificateVerify → session keys |
 | [08_exi_encoding.mermaid](sequence/08_exi_encoding.mermaid) | EXI encode/decode path: C struct → EXI codec → TLS → server response |
 
-
 ## Documentation
 * [../README.md](Readme.md) — overview, quickstart, repo map
-* [architecture.md](docs/architecture.md) — system boundaries, process model, IPC, data flows
-* [configuration.md](docs/configuration.md) — app configuration, environment variables, 
-* [sequence.md](docs/sequence.md) — lifecycle, runtime state, configuration, failure behavior
-* [development.md](docs/development.md) — setup, testing, certificates, extension workflow
+* [docs/architecture.md](architecture.md) — system boundaries, process model, IPC, data flows
+* [docs/configuration.md](configuration.md) — app configuration, environment variables, 
+* [docs/sequence.md](sequence.md) — lifecycle, runtime state, configuration, failure behavior
+* [docs/development.md](development.md) — setup, testing, certificates, extension workflow

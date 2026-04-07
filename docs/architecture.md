@@ -277,7 +277,7 @@ The current architecture doc and repo summary point to a staged roadmap:
 
 ## Documentation
 * [../README.md](Readme.md) — overview, quickstart, repo map
-* [architecture.md](docs/architecture.md) — system boundaries, process model, IPC, data flows
-* [configuration.md](docs/configuration.md) — app configuration, environment variables, 
-* [sequence.md](docs/sequence.md) — lifecycle, runtime state, configuration, failure behavior
-* [development.md](docs/development.md) — setup, testing, certificates, extension workflow
+* [docs/architecture.md](architecture.md) — system boundaries, process model, IPC, data flows
+* [docs/configuration.md](configuration.md) — app configuration, environment variables, 
+* [docs/sequence.md](sequence.md) — lifecycle, runtime state, configuration, failure behavior
+* [docs/development.md](development.md) — setup, testing, certificates, extension workflow
