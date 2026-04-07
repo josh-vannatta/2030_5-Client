@@ -1,5 +1,4 @@
 # Architecture
-/ [Home](../README.md) — Return to root
 
 The IEEE 2030.5 DER Gateway is a two-process integration layer that bridges an IEEE 2030.5 utility server to field devices over Modbus TCP today and DNP3 later. It has two hard boundaries:
 
@@ -275,3 +274,10 @@ The current architecture doc and repo summary point to a staged roadmap:
 | Phase 3 | proposed           | DNP3 adapter implementation                                                    |
 | Phase 4 | possible extension | OpenFMB / additional protocol integrations, if pursued                         |
 
+
+## Documentation
+* [../README.md](Readme.md) — overview, quickstart, repo map
+* [architecture.md](docs/architecture.md) — system boundaries, process model, IPC, data flows
+* [configuration.md](docs/configuration.md) — app configuration, environment variables, 
+* [sequence.md](docs/sequence.md) — lifecycle, runtime state, configuration, failure behavior
+* [development.md](docs/development.md) — setup, testing, certificates, extension workflow

@@ -1,6 +1,4 @@
-
-## Configuration
-/ [Home](../README.md) — Return to root
+# Configuration
 
 All runtime configuration lives in `config/gateway.yaml` by default. An alternate file can be provided with `--config <path>`. Environment variables can override selected identity fields without editing the file. 
 
@@ -161,3 +159,10 @@ logging:
   level: INFO
   format: text
 ```
+
+## Documentation
+* [../README.md](Readme.md) — overview, quickstart, repo map
+* [architecture.md](docs/architecture.md) — system boundaries, process model, IPC, data flows
+* [configuration.md](docs/configuration.md) — app configuration, environment variables, 
+* [sequence.md](docs/sequence.md) — lifecycle, runtime state, configuration, failure behavior
+* [development.md](docs/development.md) — setup, testing, certificates, extension workflow

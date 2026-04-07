@@ -1,9 +1,4 @@
 # Operations
-/ [Home](../README.md) — Return to root
-
-This document describes how the IEEE 2030.5 DER Gateway behaves at runtime, how it is configured, what state it keeps, and how it fails. It is the primary operational reference for running, troubleshooting, and reasoning about the gateway in production-like environments. It consolidates the current lifecycle, state-management, and configuration behavior into one place. :contentReference[oaicite:0]{index=0} :contentReference[oaicite:1]{index=1}
-
-## Runtime model
 
 At runtime, the gateway is a Python process that:
 
@@ -157,3 +152,11 @@ The following diagrams cover the northbound protocol stack below the Python/C bo
 |---|---|
 | [07_tls_packet_exchange.mermaid](sequence/07_tls_packet_exchange.mermaid) | Full TLS 1.2 mutual-auth handshake: ClientHello → CertificateVerify → session keys |
 | [08_exi_encoding.mermaid](sequence/08_exi_encoding.mermaid) | EXI encode/decode path: C struct → EXI codec → TLS → server response |
+
+
+## Documentation
+* [../README.md](Readme.md) — overview, quickstart, repo map
+* [architecture.md](docs/architecture.md) — system boundaries, process model, IPC, data flows
+* [configuration.md](docs/configuration.md) — app configuration, environment variables, 
+* [sequence.md](docs/sequence.md) — lifecycle, runtime state, configuration, failure behavior
+* [development.md](docs/development.md) — setup, testing, certificates, extension workflow

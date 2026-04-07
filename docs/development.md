@@ -1,7 +1,14 @@
 # Development
-/ [Home](../README.md) — Return to root
 
-This document covers how to build, run, test, and extend the IEEE 2030.5 DER Gateway as a contributor. It is the developer-facing companion to `README.md`, `docs/architecture.md`, and `docs/operations.md`. It consolidates the current setup instructions, test workflow, certificate generation, C-client patch workflow, and protocol-extension path. :contentReference[oaicite:0]{index=0}
+## Recommended workflow: VS Code Dev Container
+
+The fastest and most reliable setup path is the included dev container. The repo ships with `.devcontainer/devcontainer.json`. Open the repository in VS Code and choose **Dev Containers: Reopen in Container**. On first open it will:
+
+1. build the Docker image
+2. compile the C client in `core/`
+3. install Python dependencies with `uv` :contentReference[oaicite:2]{index=2}
+
+Inside the container, the full stack runs in a Linux environment that matches the needs of the C client.
 
 ## Prerequisites
 
@@ -13,17 +20,7 @@ This document covers how to build, run, test, and extend the IEEE 2030.5 DER Gat
 | OpenSSL | ≥ 1.1.0 | `libssl-dev` on Ubuntu |
 | Docker | any | Required on macOS |
 
-The C client is Linux-only because it depends on `epoll`. On macOS, use Docker or the VS Code Dev Container rather than trying to compile or run the C binary natively. :contentReference[oaicite:1]{index=1}
-
-## Recommended workflow: VS Code Dev Container
-
-The fastest and most reliable setup path is the included dev container. The repo ships with `.devcontainer/devcontainer.json`. Open the repository in VS Code and choose **Dev Containers: Reopen in Container**. On first open it will:
-
-1. build the Docker image
-2. compile the C client in `core/`
-3. install Python dependencies with `uv` :contentReference[oaicite:2]{index=2}
-
-Inside the container, the full stack runs in a Linux environment that matches the needs of the C client.
+The C client is Linux-only because it depends on `epoll`. On macOS, use Docker or the VS Code Dev Container rather than trying to compile or run the C binary natively.
 
 ## Native Linux setup
 
@@ -261,12 +258,9 @@ Contributors should keep these Phase 0 boundaries in mind:
 
 Those boundaries explain many current design choices and keep contributors from assuming functionality that does not exist yet.
 
-## Suggested contributor checklist
-
-Before opening a PR:
-
-1. run the relevant tests
-2. rebuild the C client if `core/` changed
-3. regenerate certs if cert-generation logic changed
-4. validate config with `--dry-run`
-5. confirm docs still match behavior if you changed runtime semantics or config shape
+## Documentation
+* [../README.md](Readme.md) — overview, quickstart, repo map
+* [architecture.md](docs/architecture.md) — system boundaries, process model, IPC, data flows
+* [configuration.md](docs/configuration.md) — app configuration, environment variables, 
+* [sequence.md](docs/sequence.md) — lifecycle, runtime state, configuration, failure behavior
+* [development.md](docs/development.md) — setup, testing, certificates, extension workflow
