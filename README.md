@@ -303,9 +303,10 @@ EVENT_JSON:{"type":"default_control","control":{"opModMaxLimW":10000,"opModConne
 ## Documentation
 
 * `README.md` — overview, quickstart, repo map
-* `docs/architecture.md` — system boundaries, process model, IPC, data flows
-* `docs/operations.md` — lifecycle, runtime state, configuration, failure behavior
-* `docs/development.md` — setup, testing, certificates, extension workflow
+* [docs/architecture.md](docs/architecture.md) — system boundaries, process model, IPC, data flows
+* [docs/configuration.md](docs/configuration.md) — configuration files, environment variables, certs
+* [docs/sequence.md](docs/sequence.md) — lifecycle, runtime state, configuration, failure behavior
+* [docs/development.md](docs/development.md) — setup, testing, certificates, extension workflow
 
 ## References
 
