@@ -9,6 +9,8 @@ At a high level, the C client owns the IEEE 2030.5 wire protocol, while the Pyth
 
 ## System context
 
+> Diagram: [p0_system_overview.mermaid](architecture/p0_system_overview.mermaid)
+
 ```text
 [Utility / Aggregator Server]
         ↕ IEEE 2030.5 (HTTPS + EXI/XML)
@@ -60,6 +62,8 @@ The Python side handles everything outside the 2030.5 transport:
 
 ## Module layout
 
+> Diagram: [p0_component_map.mermaid](architecture/p0_component_map.mermaid)
+
 The Python package is structured around a small set of focused modules:
 
 ```text
@@ -92,6 +96,8 @@ EVENT_JSON:{"type":"default_control","control":{"opModMaxLimW":10000,"opModConne
 `gateway/client.py` reads stdout line-by-line. Lines beginning with `EVENT_JSON:` are parsed as JSON and yielded into the Python event loop; non-event output is treated as ordinary process output. This keeps the C binary isolated from field protocol details and register maps. 
 
 ## Northbound and southbound flows
+
+> Diagram: [p0_data_model.mermaid](architecture/p0_data_model.mermaid)
 
 The gateway has two primary data flows.
 
@@ -147,6 +153,8 @@ The startup flow is intentionally simple and linear:
 A key architectural constraint in the current implementation is that the XML settings files are written once at startup and not refreshed during steady state. 
 
 ## 2030.5 resource traversal
+
+> Diagram: [p0_resource_traversal.mermaid](architecture/p0_resource_traversal.mermaid)
 
 After startup, the C client performs standard 2030.5 discovery and traversal. The documented traversal path is:
 

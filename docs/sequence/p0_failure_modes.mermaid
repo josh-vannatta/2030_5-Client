@@ -1,0 +1,52 @@
+sequenceDiagram
+    autonumber
+    participant PY  as Python Gateway
+    participant CFG as gateway.yaml
+    participant MB  as Modbus Device
+    participant C   as C Binary
+    participant SRV as 2030.5 Server
+
+    %% ── Failure 1: bad config ────────────────────────────────────────────
+    rect rgb(230,230,230)
+        Note over PY,CFG: Failure: invalid gateway.yaml or missing cert / CA path
+        PY  ->>  CFG: config.load()
+        CFG -->> PY: ValueError / FileNotFoundError
+        Note over PY: process exits immediately<br/>no field-protocol connection is ever opened
+    end
+
+    %% ── Failure 2: startup register read ────────────────────────────────
+    rect rgb(230,230,230)
+        Note over PY,MB: Failure: startup register read error
+        PY  ->>  MB: connect()
+        MB -->>  PY: connected
+        PY  ->>  MB: read_register(address)
+        MB -->>  PY: error / timeout
+        Note over PY: WARNING logged<br/>default DERState value substituted<br/>startup continues — not a fatal error
+    end
+
+    %% ── Failure 3: client_test binary missing ────────────────────────────
+    rect rgb(230,230,230)
+        Note over PY,C: Failure: client_test binary not found
+        PY  ->>  C: EpriClient.start() → spawn(client_test)
+        C  -->>  PY: FileNotFoundError
+        PY  ->>  PY: EpriClientError raised
+        Note over PY: teardown: disconnect field protocol and exit
+    end
+
+    %% ── Failure 4: client_test exits non-zero ────────────────────────────
+    rect rgb(230,230,230)
+        Note over C,SRV: Failure: client_test exits with non-zero return code
+        SRV ->>  C: (event or error)
+        C  -->>  PY: stdout EOF, returncode != 0
+        PY  ->>  PY: EpriClientError raised inside events()
+        Note over PY: teardown begins — see p0_teardown_sequence
+    end
+
+    %% ── Failure 5: register write failure ───────────────────────────────
+    rect rgb(230,230,230)
+        Note over PY,MB: Failure: Modbus write error during active event
+        PY  ->>  MB: write_register(address, value)
+        MB -->>  PY: exception (connection lost / timeout)
+        Note over PY: exception propagated — event loop exits<br/>teardown begins
+        Note over MB: ⚠ partial write possible:<br/>some registers updated, others not<br/>device may hold inconsistent setpoints
+    end
