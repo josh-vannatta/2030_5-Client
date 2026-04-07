@@ -28,6 +28,55 @@ char *timestamp () {
 // All other output (printf elsewhere in the codebase) is treated as debug log.
 // ---------------------------------------------------------------------------
 
+// Emit the fields of a DERControlBase as a JSON object body (no braces).
+// Caller is responsible for opening/closing braces and surrounding context.
+static int emit_control_base (SE_DERControlBase_t *b) {
+  int first = 1;
+
+  if (b->_flags & SE_opModFixedW_exists) {
+    printf ("\"opModFixedW\":%d", (int) b->opModFixedW);
+    first = 0;
+  }
+  if (b->_flags & SE_opModMaxLimW_exists) {
+    if (!first) printf (",");
+    printf ("\"opModMaxLimW\":%u", (unsigned int) b->opModMaxLimW);
+    first = 0;
+  }
+  if (b->_flags & SE_opModTargetW_exists) {
+    if (!first) printf (",");
+    printf ("\"opModTargetW\":%d", (int) b->opModTargetW.value);
+    first = 0;
+  }
+  if (b->_flags & SE_opModFixedVar_exists) {
+    if (!first) printf (",");
+    printf ("\"opModFixedVar\":%d", (int) b->opModFixedVar.value);
+    first = 0;
+  }
+  if (b->_flags & SE_opModTargetVar_exists) {
+    if (!first) printf (",");
+    printf ("\"opModTargetVar\":%d", (int) b->opModTargetVar.value);
+    first = 0;
+  }
+  if (b->_flags & SE_rampTms_exists) {
+    if (!first) printf (",");
+    printf ("\"rampTms\":%u", (unsigned int) b->rampTms);
+    first = 0;
+  }
+  if (b->_flags & SE_opModConnect_exists) {
+    if (!first) printf (",");
+    printf ("\"opModConnect\":%s",
+            (b->_flags & SE_opModConnect_true) ? "true" : "false");
+    first = 0;
+  }
+  if (b->_flags & SE_opModEnergize_exists) {
+    if (!first) printf (",");
+    printf ("\"opModEnergize\":%s",
+            (b->_flags & SE_opModEnergize_true) ? "true" : "false");
+    first = 0;
+  }
+  return first; // 1 = no fields emitted (empty control)
+}
+
 static void emit_event_json (EventBlock *eb, const char *type) {
   Resource *r = eb->event;
   DerDevice *device = eb->context;
@@ -45,54 +94,23 @@ static void emit_event_json (EventBlock *eb, const char *type) {
 
   if (strcmp (type, "start") == 0 && r->type == SE_DERControl) {
     SE_DERControl_t *derc = r->data;
-    SE_DERControlBase_t *b = &derc->DERControlBase;
-    int first = 1;
     printf (",\"control\":{");
-
-    if (b->_flags & SE_opModFixedW_exists) {
-      printf ("\"opModFixedW\":%d", (int) b->opModFixedW);
-      first = 0;
-    }
-    if (b->_flags & SE_opModMaxLimW_exists) {
-      if (!first) printf (",");
-      printf ("\"opModMaxLimW\":%u", (unsigned int) b->opModMaxLimW);
-      first = 0;
-    }
-    if (b->_flags & SE_opModTargetW_exists) {
-      if (!first) printf (",");
-      printf ("\"opModTargetW\":%d", (int) b->opModTargetW.value);
-      first = 0;
-    }
-    if (b->_flags & SE_opModFixedVar_exists) {
-      if (!first) printf (",");
-      printf ("\"opModFixedVar\":%d", (int) b->opModFixedVar.value);
-      first = 0;
-    }
-    if (b->_flags & SE_opModTargetVar_exists) {
-      if (!first) printf (",");
-      printf ("\"opModTargetVar\":%d", (int) b->opModTargetVar.value);
-      first = 0;
-    }
-    if (b->_flags & SE_rampTms_exists) {
-      if (!first) printf (",");
-      printf ("\"rampTms\":%u", (unsigned int) b->rampTms);
-      first = 0;
-    }
-    if (b->_flags & SE_opModConnect_exists) {
-      if (!first) printf (",");
-      printf ("\"opModConnect\":%s",
-              (b->_flags & SE_opModConnect_true) ? "true" : "false");
-      first = 0;
-    }
-    if (b->_flags & SE_opModEnergize_exists) {
-      if (!first) printf (",");
-      printf ("\"opModEnergize\":%s",
-              (b->_flags & SE_opModEnergize_true) ? "true" : "false");
-    }
+    emit_control_base (&derc->DERControlBase);
     printf ("}");
   }
 
   printf ("}\n");
+  fflush (stdout);
+}
+
+static void emit_default_control_json (DerDevice *device,
+                                       SE_DefaultDERControl_t *dc) {
+  printf ("EVENT_JSON:{\"type\":\"default_control\",\"sfdi\":%lu",
+          (unsigned long) device->sfdi);
+  printf (",\"description\":\"%s\"", dc->description);
+  printf (",\"control\":{");
+  emit_control_base (&dc->DERControlBase);
+  printf ("}}\n");
   fflush (stdout);
 }
 
@@ -123,6 +141,7 @@ void print_default_control (DerDevice *device) {
   printf ("EndDevice: %ld\n", device->sfdi);
   print_se_object (dc, SE_DefaultDERControl);
   printf ("\n");
+  emit_default_control_json (device, dc);
 }
 
 void print_blocks (EventBlock *eb) {

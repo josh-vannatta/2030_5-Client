@@ -2,48 +2,45 @@
 #
 # Used for:
 #   - Compiling the EPRI C client on macOS (C code requires Linux / epoll)
-#   - Running the gateway in a container
-#   - CI/CD
+#   - Running the gateway in a container (production / CI)
+#   - VS Code Dev Containers (.devcontainer/devcontainer.json)
 #
-# Build:
+# Production build & run:
 #   docker build -t gateway .
-#
-# Run (development):
 #   docker run --rm -it \
 #     --network host \
-#     -v $(pwd)/config:/app/config:ro \
-#     gateway
-#
-# Run (with explicit config):
-#   docker run --rm -it \
 #     -v $(pwd)/config:/app/config:ro \
 #     gateway --config /app/config/gateway.yaml
 
 FROM ubuntu:24.04
 
-# System dependencies
+# ── System dependencies (cached layer — rebuild only when this changes) ──────
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    libc6-dev \
     make \
     libssl-dev \
     python3 \
     python3-pip \
     python3-venv \
+    curl \
     && rm -rf /var/lib/apt/lists/*
+
+# Install uv (fast Python package manager)
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+ENV PATH="/root/.local/bin:$PATH"
 
 WORKDIR /app
 
-# Copy source
+# ── Production build (skipped in Dev Containers — postCreateCommand handles it)
+# Dev Containers mount the repo over /app after image build, so the COPY layer
+# is replaced. The RUN steps below only run for production/CI builds.
 COPY . .
-
-# Build the EPRI C client
 RUN cd epri_client && make
+RUN uv sync --all-groups
 
-# Install Python package and dependencies
-RUN pip3 install --break-system-packages -e ".[dev]"
-
-# Certs and config are expected to be mounted at runtime
+# Certs and config mounted at runtime
 VOLUME ["/app/config"]
 
-ENTRYPOINT ["python3", "-m", "gateway"]
+ENTRYPOINT ["uv", "run", "python", "-m", "gateway"]
 CMD ["--config", "/app/config/gateway.yaml"]

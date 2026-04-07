@@ -1,5 +1,12 @@
 """Gateway entry point.
 
+Startup sequence:
+  1. Load and validate config
+  2. Connect field protocol (Modbus / DNP3)
+  3. Read device state from field protocol → write DER settings XML
+  4. Launch EPRI C client subprocess
+  5. Forward DER events from C binary to field protocol via DERBridge
+
 Usage:
     python -m gateway                          # uses config/gateway.yaml
     python -m gateway --config /path/to.yaml
@@ -17,6 +24,7 @@ from . import log as log_module
 from .bridge import make_bridge
 from .client import EpriClient
 from .config import load
+from .device import read_device_state
 from .settings import DERState, write_settings
 
 logger = logging.getLogger(__name__)
@@ -57,20 +65,26 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Protocol  : {cfg.protocol}")
         return 0
 
-    # --- Write DER settings XML from current device state ---
-    # TODO: replace DERState() with live reads from the field device
-    state = DERState()
-    logger.info("Writing DER settings XML to %s", _SETTINGS_DIR)
-    write_settings(state, _SETTINGS_DIR)
-
-    # --- Build field protocol bridge ---
+    # --- Build bridge (protocol adapter not connected yet) ---
     bridge = make_bridge(cfg)
 
-    # --- Run ---
-    logger.info("Starting gateway (server=%s, protocol=%s)", cfg.server_uri, cfg.protocol)
-    with EpriClient(cfg) as client, bridge.protocol:
-        for event in client.events():
-            bridge.apply(event)
+    logger.info(
+        "Starting gateway (server=%s, protocol=%s)", cfg.server_uri, cfg.protocol
+    )
+
+    # Connect field protocol first so we can read device state before the
+    # C binary launches. Settings XML must be written before client_test runs
+    # because the C binary reads them only once at startup.
+    with bridge.protocol:
+        reads = cfg.modbus.reads if cfg.protocol == "modbus" and cfg.modbus else None
+        state = read_device_state(bridge.protocol, reads)
+
+        logger.info("Writing DER settings XML to %s", _SETTINGS_DIR)
+        write_settings(state, _SETTINGS_DIR)
+
+        with EpriClient(cfg) as client:
+            for event in client.events():
+                bridge.apply(event)
 
     return 0
 

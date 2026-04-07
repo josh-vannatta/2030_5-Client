@@ -12,7 +12,7 @@ import yaml
 
 @dataclass
 class RegisterMap:
-    """Modbus register addresses for DER control points."""
+    """Modbus holding-register addresses for DER control outputs (writes)."""
 
     active_power: int = 40100    # opModFixedW / opModTargetW  (signed %)
     reactive_power: int = 40101  # opModFixedVar / opModTargetVar
@@ -23,12 +23,44 @@ class RegisterMap:
 
 
 @dataclass
+class ReadMap:
+    """Modbus input-register addresses for DER telemetry (reads).
+
+    All fields are optional (None = not wired / use default). Registers are
+    read at startup to populate DERCapability/Settings/Status/Availability XML
+    before the 2030.5 client connects to the server.
+    """
+
+    # ── Live status & availability ─────────────────────────────────────────
+    inverter_status: int | None = None     # inverter status code (se DERStatus)
+    gen_connect_status: int | None = None  # generator connect status (0/1)
+    state_of_charge: int | None = None     # battery SOC % (0–100; 0 if no storage)
+    available_w: int | None = None         # available active power (W)
+    available_var: int | None = None       # available reactive power (VAR)
+
+    # ── Static capability (read once at startup) ───────────────────────────
+    rated_w: int | None = None             # rated active power (W)
+    rated_va: int | None = None            # rated apparent power (VA)
+    rated_ah: int | None = None            # rated capacity (Ah; 0 if no storage)
+
+    # ── Operator-configured limits ─────────────────────────────────────────
+    max_w: int | None = None               # max active power output (W)
+    max_a: int | None = None               # max current (A)
+
+    # ── Metering ──────────────────────────────────────────────────────────
+    active_power_output: int | None = None    # current active power output (W)
+    reactive_power_output: int | None = None  # current reactive power output (VAR)
+    energy_delivered_wh: int | None = None    # cumulative energy delivered (Wh)
+
+
+@dataclass
 class ModbusConfig:
     host: str
     port: int = 502
     unit_id: int = 1
     timeout: float = 5.0
     registers: RegisterMap = field(default_factory=RegisterMap)
+    reads: ReadMap = field(default_factory=ReadMap)
 
 
 @dataclass
@@ -105,7 +137,6 @@ def load(path: str | Path) -> Config:
     with open(path) as f:
         raw = yaml.safe_load(f)
 
-    # Apply environment variable overrides for secrets
     _apply_env_overrides(raw)
 
     try:
@@ -143,12 +174,14 @@ def _build(raw: dict) -> Config:
     if proto_type == "modbus" and "modbus" in proto:
         mb = proto["modbus"]
         reg_raw = mb.get("registers", {})
+        reads_raw = mb.get("reads", {})
         modbus_cfg = ModbusConfig(
             host=mb["host"],
             port=mb.get("port", 502),
             unit_id=mb.get("unit_id", 1),
             timeout=mb.get("timeout", 5.0),
             registers=RegisterMap(**reg_raw) if reg_raw else RegisterMap(),
+            reads=ReadMap(**reads_raw) if reads_raw else ReadMap(),
         )
     elif proto_type == "dnp3" and "dnp3" in proto:
         d = proto["dnp3"]

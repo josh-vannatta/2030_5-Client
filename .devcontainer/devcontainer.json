@@ -1,0 +1,53 @@
+{
+  "name": "IEEE 2030.5 Gateway",
+
+  // Build the dev environment from the project Dockerfile.
+  // VS Code mounts the repo at /app over the COPY'd layer, so edits on the
+  // Mac are immediately visible inside the container.
+  "build": {
+    "dockerfile": "../Dockerfile",
+    "context": ".."
+  },
+
+  // Override the runtime entrypoint — we want a shell, not the gateway process.
+  "overrideCommand": true,
+
+  // Runs from the workspace root (/workspaces/2030_5-client) after source is mounted.
+  // make clean forces a fresh arm64 build — skipping it risks running a stale
+  // x86-64 binary from a cached Docker layer.
+  "postCreateCommand": "cd epri_client && make clean && make && cd .. && uv sync --all-groups",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        // Python
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.debugpy",
+        // C/C++ (for epri_client browsing)
+        "ms-vscode.cpptools",
+        // Linting / formatting
+        "charliermarsh.ruff",
+        // YAML config editing
+        "redhat.vscode-yaml",
+        // Testing (pytest discovery built into ms-python.python)
+        "ms-python.vscode-python-envs"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "${containerWorkspaceFolder}/.venv/bin/python",
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestArgs": ["tests"],
+        "editor.formatOnSave": true,
+        "[python]": {
+          "editor.defaultFormatter": "charliermarsh.ruff"
+        }
+      }
+    }
+  },
+
+  // Forward nothing by default — the gateway connects OUT to the server/device,
+  // not the other way around. Add ports here if you add a local HTTP debug server.
+  "forwardPorts": [],
+
+  "remoteUser": "root"
+}

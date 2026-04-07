@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
 import pytest
 
@@ -13,8 +13,7 @@ from gateway.protocols import FieldProtocol
 
 @pytest.fixture()
 def mock_protocol() -> MagicMock:
-    proto = MagicMock(spec=FieldProtocol)
-    return proto
+    return MagicMock(spec=FieldProtocol)
 
 
 @pytest.fixture()
@@ -27,7 +26,7 @@ def bridge(mock_protocol, registers) -> DERBridge:
     return DERBridge(protocol=mock_protocol, registers=registers)
 
 
-# --- start events ---
+# ── start events ──────────────────────────────────────────────────────────────
 
 def test_start_event_writes_active_power(bridge, mock_protocol, registers):
     bridge.apply({"type": "start", "sfdi": 111115, "control": {"opModFixedW": -50}})
@@ -65,7 +64,7 @@ def test_start_event_multiple_fields(bridge, mock_protocol, registers):
         "sfdi": 111115,
         "control": {"opModFixedW": 100, "rampTms": 50, "opModConnect": True},
     })
-    calls = {call.args[0]: call.args[1] for call in mock_protocol.write_register.call_args_list}
+    calls = {c.args[0]: c.args[1] for c in mock_protocol.write_register.call_args_list}
     assert calls[registers.active_power] == 100
     assert calls[registers.ramp_time] == 50
     assert calls[registers.connect] == 1
@@ -76,14 +75,86 @@ def test_start_event_empty_control_no_writes(bridge, mock_protocol):
     mock_protocol.write_register.assert_not_called()
 
 
-# --- end events ---
+def test_opmod_target_w_overwrites_fixed_w(bridge, mock_protocol, registers):
+    """opModTargetW takes precedence when both are present."""
+    bridge.apply({
+        "type": "start",
+        "sfdi": 111115,
+        "control": {"opModFixedW": 50, "opModTargetW": 1200},
+    })
+    calls = [c.args for c in mock_protocol.write_register.call_args_list
+             if c.args[0] == registers.active_power]
+    assert calls[-1] == (registers.active_power, 1200)
 
-def test_end_event_no_register_writes(bridge, mock_protocol):
-    bridge.apply({"type": "end", "sfdi": 111115, "description": "test"})
+
+# ── end events & relinquish ──────────────────────────────────────────────────
+
+def test_end_event_clears_previously_written_registers(bridge, mock_protocol, registers):
+    bridge.apply({"type": "start", "sfdi": 111115, "control": {"opModFixedW": -50}})
+    mock_protocol.reset_mock()
+
+    bridge.apply({"type": "end", "sfdi": 111115})
+    mock_protocol.write_register.assert_called_once_with(registers.active_power, 0)
+
+
+def test_end_event_clears_all_active_registers(bridge, mock_protocol, registers):
+    bridge.apply({
+        "type": "start",
+        "sfdi": 111115,
+        "control": {"opModFixedW": -50, "rampTms": 100, "opModConnect": True},
+    })
+    mock_protocol.reset_mock()
+    bridge.apply({"type": "end", "sfdi": 111115})
+
+    cleared = {c.args[0] for c in mock_protocol.write_register.call_args_list}
+    assert registers.active_power in cleared
+    assert registers.ramp_time in cleared
+    assert registers.connect in cleared
+
+
+def test_end_event_no_writes_when_nothing_active(bridge, mock_protocol):
+    bridge.apply({"type": "end", "sfdi": 111115})
     mock_protocol.write_register.assert_not_called()
 
 
-# --- edge cases ---
+def test_active_registers_cleared_after_relinquish(bridge, mock_protocol, registers):
+    bridge.apply({"type": "start", "sfdi": 111115, "control": {"opModFixedW": -50}})
+    bridge.apply({"type": "end", "sfdi": 111115})
+    mock_protocol.reset_mock()
+
+    # Second end should be a no-op
+    bridge.apply({"type": "end", "sfdi": 111115})
+    mock_protocol.write_register.assert_not_called()
+
+
+# ── default_control events ────────────────────────────────────────────────────
+
+def test_default_control_applies_setpoints(bridge, mock_protocol, registers):
+    bridge.apply({
+        "type": "default_control",
+        "sfdi": 111115,
+        "control": {"opModFixedW": 100},
+    })
+    mock_protocol.write_register.assert_called_with(registers.active_power, 100)
+
+
+def test_default_control_clears_previous_active_registers(bridge, mock_protocol, registers):
+    bridge.apply({"type": "start", "sfdi": 111115, "control": {"opModFixedW": -50}})
+    bridge.apply({"type": "default_control", "sfdi": 111115, "control": {"opModFixedW": 100}})
+    mock_protocol.reset_mock()
+
+    # After default_control, a subsequent end should only clear the default registers
+    bridge.apply({"type": "end", "sfdi": 111115})
+    calls = {c.args[0]: c.args[1] for c in mock_protocol.write_register.call_args_list}
+    assert calls.get(registers.active_power) == 0
+
+
+def test_default_control_empty_control_no_writes(bridge, mock_protocol):
+    bridge.apply({"type": "default_control", "sfdi": 111115, "control": {}})
+    mock_protocol.write_register.assert_not_called()
+
+
+# ── edge cases ────────────────────────────────────────────────────────────────
 
 def test_unknown_event_type_ignored(bridge, mock_protocol):
     bridge.apply({"type": "unknown"})
@@ -94,3 +165,13 @@ def test_write_failure_raises(bridge, mock_protocol, registers):
     mock_protocol.write_register.side_effect = ConnectionError("device offline")
     with pytest.raises(ConnectionError, match="device offline"):
         bridge.apply({"type": "start", "sfdi": 111115, "control": {"opModFixedW": 50}})
+
+
+def test_relinquish_failure_logged_and_continues(bridge, mock_protocol, registers):
+    """A failed relinquish write should log but not crash the process."""
+    bridge.apply({"type": "start", "sfdi": 111115, "control": {"opModFixedW": -50}})
+    mock_protocol.write_register.side_effect = ConnectionError("offline")
+
+    # Should not raise
+    bridge._relinquish()
+    assert bridge._active_registers == {}

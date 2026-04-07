@@ -7,7 +7,7 @@
 
 device:
   # Short-Form Device Identifier (last 5 digits of SHA-256 of LFDI)
-  sfdi: "111115"
+  sfdi: "320841683177"
   # Path to device certificate (PEM format)
   cert: "config/certs/device.pem"
   # Directory containing trusted CA certificates
@@ -32,7 +32,8 @@ protocol:
     port: 502
     unit_id: 1
     timeout: 5.0
-    # Holding register addresses for DER control points
+
+    # ── Control outputs (holding registers — written on DERControl events) ──
     registers:
       active_power: 40100    # opModFixedW / opModTargetW  (signed %)
       reactive_power: 40101  # opModFixedVar / opModTargetVar
@@ -40,6 +41,24 @@ protocol:
       ramp_time: 40103       # rampTms  (1/100 s)
       connect: 40104         # opModConnect  (0=disconnect, 1=connect)
       energize: 40105        # opModEnergize (0=de-energize, 1=energize)
+
+    # ── Telemetry inputs (read at startup to populate DER settings XML) ────
+    # All addresses are optional — omit or comment out any register not wired.
+    # Addresses below are examples; replace with your device's register map.
+    reads:
+      # Live status & availability
+      inverter_status: 30201     # Inverter status code (see IEEE 2030.5 Table 10-6)
+      gen_connect_status: 30202  # Generator connect status (0=disconnected, 1=connected)
+      state_of_charge: 30200     # Battery SOC % (0–100; omit if no storage)
+      available_w: 30203         # Available active power (W)
+      available_var: 30204       # Available reactive power (VAR)
+      # Static capability (read once; usually matches nameplate)
+      rated_w: 30300             # Rated active power (W)
+      rated_va: 30301            # Rated apparent power (VA)
+      rated_ah: 30302            # Rated capacity (Ah; omit if no storage)
+      # Operator limits
+      max_w: 30303               # Max active power output (W)
+      max_a: 30304               # Max current (A)
 
   # dnp3:
   #   host: "192.168.1.201"

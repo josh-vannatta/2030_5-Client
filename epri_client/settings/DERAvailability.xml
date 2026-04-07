@@ -1,9 +1,5 @@
-<DERAvailability xmlns="http://ieee.org/2030.5">
-  <availabilityDuration>10</availabilityDuration>
-  <maxChargeDuration>10</maxChargeDuration>
-  <readingTime>1514906127</readingTime>
-  <reserveChargePercent>40</reserveChargePercent>
-  <reservePercent>40</reservePercent>
+<?xml version="1.0" encoding="utf-8"?>
+<DERAvailability xmlns="urn:ieee:std:2030.5:ns">
   <statVarAvail>
     <multiplier>0</multiplier>
     <value>200</value>
