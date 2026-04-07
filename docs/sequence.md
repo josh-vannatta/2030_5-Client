@@ -154,7 +154,7 @@ The following diagrams cover the northbound protocol stack below the Python/C bo
 | [08_exi_encoding.mermaid](sequence/08_exi_encoding.mermaid) | EXI encode/decode path: C struct → EXI codec → TLS → server response |
 
 ## Documentation
-* [../README.md](Readme.md) — overview, quickstart, repo map
+* [readme.md](../README.md) — overview, quickstart, repo map
 * [docs/architecture.md](architecture.md) — system boundaries, process model, IPC, data flows
 * [docs/configuration.md](configuration.md) — app configuration, environment variables, 
 * [docs/sequence.md](sequence.md) — lifecycle, runtime state, configuration, failure behavior

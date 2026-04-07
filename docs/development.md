@@ -259,7 +259,7 @@ Contributors should keep these Phase 0 boundaries in mind:
 Those boundaries explain many current design choices and keep contributors from assuming functionality that does not exist yet.
 
 ## Documentation
-* [../README.md](Readme.md) — overview, quickstart, repo map
+* [readme.md](../README.md) — overview, quickstart, repo map
 * [docs/architecture.md](architecture.md) — system boundaries, process model, IPC, data flows
 * [docs/configuration.md](configuration.md) — app configuration, environment variables, 
 * [docs/sequence.md](sequence.md) — lifecycle, runtime state, configuration, failure behavior
