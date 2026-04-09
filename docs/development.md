@@ -121,6 +121,7 @@ gateway/
 ├── device.py         # Reads telemetry registers at startup -> DERState
 ├── settings.py       # DERState -> DERCapability / DERSettings / DERStatus / DERAvailability XML
 ├── log.py            # Logging setup: text or JSON format
+├── telemetry.py      # OpenTelemetry traces, metrics, and log bridge (optional)
 └── protocols/
     ├── base.py       # FieldProtocol abstraction
     ├── modbus.py     # pymodbus TCP adapter
@@ -235,6 +236,79 @@ The Python side assumes the C client continues to emit one structured line per e
 * rebuild C client
 * update `gateway/client.py`
 * update `tests/test_client.py`
+
+## Observability
+
+The gateway can export traces, metrics, and structured logs to any OTLP-compatible backend such as Grafana LGTM (Loki + Grafana + Tempo + Mimir) or a standalone OpenTelemetry Collector.
+
+### Installing the packages
+
+OTel support is an optional dependency group. Install it alongside core deps:
+
+```bash
+uv sync --group otel
+```
+
+The Dockerfile's existing `uv sync --all-groups` installs this group automatically. When the packages are absent and telemetry is enabled in config, the gateway logs a warning at startup and continues running normally — no crash, no degraded behavior.
+
+### Enabling telemetry
+
+**Option 1 — config file** (persistent, checked in with the repo):
+
+```yaml
+telemetry:
+  enabled: true
+  endpoint: http://otel-lgtm:4318
+```
+
+**Option 2 — environment variable** (useful for CI, containers, or ad-hoc runs):
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-lgtm:4318
+uv run python -m gateway
+```
+
+Setting `OTEL_EXPORTER_OTLP_ENDPOINT` activates telemetry automatically even when `enabled: false` in the YAML, which means you can leave the config file unchanged and control telemetry entirely through the environment.
+
+### Local collector with Grafana LGTM
+
+The easiest local stack is the all-in-one `grafana/otel-lgtm` Docker image, which exposes the OTLP HTTP port on `4318` and Grafana on `3000`:
+
+```bash
+docker run --rm -p 3000:3000 -p 4318:4318 grafana/otel-lgtm
+```
+
+Then run the gateway with the endpoint pointed at it:
+
+```bash
+OTEL_SERVICE_NAME=ieee2030-gateway \
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
+uv run python -m gateway --dry-run
+```
+
+Open `http://localhost:3000` (user `admin`, password `admin`) to see traces in Tempo, metrics in Mimir, and logs in Loki.
+
+### Overriding individual signals
+
+When routing signals to separate backends, use per-signal env vars:
+
+```bash
+export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://tempo:4318/v1/traces
+export OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://mimir:9090/otlp/v1/metrics
+export OTEL_EXPORTER_OTLP_LOGS_ENDPOINT=http://loki:3100/otlp/v1/logs
+```
+
+### What is exported
+
+See [configuration.md — telemetry](configuration.md#telemetry) for the full signal reference. The short version:
+
+* **Traces** — `gateway.run` root span with `epri_client.session` and per-event `bridge.event` child spans
+* **Metrics** — counters for subprocess runs, DERControl events, Modbus operations, and errors; a histogram for subprocess session duration
+* **Logs** — all Python `logging` output forwarded verbatim via a root-logger handler; the console/file settings in `logging:` are unaffected
+
+### Disabling telemetry
+
+Set `enabled: false` (the default) and ensure `OTEL_EXPORTER_OTLP_ENDPOINT` is not set. No OTel network connections are made and the `span()`, `count()`, and `record()` call sites in the gateway code resolve to no-ops at runtime.
 
 ## Logging and debug workflow
 

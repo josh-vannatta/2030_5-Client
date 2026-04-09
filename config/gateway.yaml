@@ -75,3 +75,31 @@ logging:
   level: INFO        # DEBUG | INFO | WARNING | ERROR
   format: text       # text | json
   # file: /var/log/gateway.log  # omit to log to stdout only
+
+# ── Observability (OpenTelemetry) ──────────────────────────────────────────
+#
+# Requires the otel dependency group:
+#   uv sync --group otel
+#
+# Telemetry is also auto-enabled (without changing this file) by setting
+# OTEL_EXPORTER_OTLP_ENDPOINT in the environment.
+#
+# Standard OTel env vars are always honoured:
+#   OTEL_SERVICE_NAME                        override the service name in Grafana
+#   OTEL_EXPORTER_OTLP_ENDPOINT              base collector endpoint
+#   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT       per-signal override
+#   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT      per-signal override
+#   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT         per-signal override
+#   OTEL_RESOURCE_ATTRIBUTES                 extra resource tags (key=value,...)
+telemetry:
+  # Set to true to activate traces, metrics, and structured log export.
+  # When false (default) and OTEL_EXPORTER_OTLP_ENDPOINT is not set, the
+  # gateway runs with zero OpenTelemetry overhead — no packages are loaded
+  # and no network connections are attempted.
+  enabled: false
+
+  # Base OTLP/HTTP collector endpoint.
+  # Signals are posted to: {endpoint}/v1/traces  /v1/metrics  /v1/logs
+  # Omit (or leave commented) to use OTEL_EXPORTER_OTLP_ENDPOINT from the
+  # environment, falling back to http://localhost:4318.
+  # endpoint: http://otel-lgtm:4318

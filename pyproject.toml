@@ -18,6 +18,11 @@ dev = [
     "pytest>=8.0",
     "pytest-mock>=3.12",
 ]
+otel = [
+    "opentelemetry-api>=1.32.0",
+    "opentelemetry-sdk>=1.32.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.32.0",
+]
 
 [project.scripts]
 gateway = "gateway.__main__:main"

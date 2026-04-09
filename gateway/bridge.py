@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from . import telemetry
 from .config import RegisterMap
 from .protocols import FieldProtocol
 
@@ -42,38 +43,41 @@ class DERBridge:
 
     def apply(self, event: dict[str, Any]) -> None:
         """Process one event dict from EpriClient.events()."""
-        event_type = event.get("type")
-        sfdi = event.get("sfdi")
+        event_type = event.get("type") or "unknown"
+        sfdi = event.get("sfdi") or ""
         description = event.get("description", "")
 
-        if event_type == "start":
-            control = event.get("control", {})
-            logger.info(
-                "EVENT START  sfdi=%s desc=%r control=%s", sfdi, description, control
-            )
-            self._apply_control(control)
+        with telemetry.span("bridge.event", event_type=event_type, sfdi=sfdi):
+            telemetry.count("gateway_bridge_events_total", event_type=event_type)
 
-        elif event_type == "end":
-            logger.info(
-                "EVENT END    sfdi=%s desc=%r — relinquishing control",
-                sfdi, description,
-            )
-            self._relinquish()
+            if event_type == "start":
+                control = event.get("control", {})
+                logger.info(
+                    "EVENT START  sfdi=%s desc=%r control=%s", sfdi, description, control
+                )
+                self._apply_control(control)
 
-        elif event_type == "default_control":
-            control = event.get("control", {})
-            logger.info(
-                "DEFAULT CTRL sfdi=%s desc=%r control=%s", sfdi, description, control
-            )
-            # Apply server-specified default setpoints. These take effect when
-            # no active DERControl event is scheduled (after EVENT_END or at
-            # startup). Clear tracked registers first so _relinquish on the
-            # next EVENT_END releases the default setpoints too.
-            self._active_registers.clear()
-            self._apply_control(control)
+            elif event_type == "end":
+                logger.info(
+                    "EVENT END    sfdi=%s desc=%r — relinquishing control",
+                    sfdi, description,
+                )
+                self._relinquish()
 
-        else:
-            logger.debug("Unhandled event type %r: %s", event_type, event)
+            elif event_type == "default_control":
+                control = event.get("control", {})
+                logger.info(
+                    "DEFAULT CTRL sfdi=%s desc=%r control=%s", sfdi, description, control
+                )
+                # Apply server-specified default setpoints. These take effect when
+                # no active DERControl event is scheduled (after EVENT_END or at
+                # startup). Clear tracked registers first so _relinquish on the
+                # next EVENT_END releases the default setpoints too.
+                self._active_registers.clear()
+                self._apply_control(control)
+
+            else:
+                logger.debug("Unhandled event type %r: %s", event_type, event)
 
     # ------------------------------------------------------------------
     # Control application
@@ -145,6 +149,7 @@ class DERBridge:
             self.protocol.write_register(address, value)
             self._active_registers[address] = value
         except Exception:
+            telemetry.count("gateway_bridge_errors_total", register=str(address))
             logger.exception("Failed to write register %d = %d", address, value)
             raise
 

@@ -17,10 +17,12 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
 from . import log as log_module
+from . import telemetry
 from .bridge import make_bridge
 from .client import EpriClient
 from .config import load
@@ -57,6 +59,18 @@ def main(argv: list[str] | None = None) -> int:
     # --- Configure logging ---
     log_module.configure(level=cfg.log.level, fmt=cfg.log.format, file=cfg.log.file)
 
+    # --- Configure telemetry (no-op when disabled or packages absent) ---
+    _otel_env = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT")
+    if cfg.telemetry.enabled or _otel_env:
+        try:
+            telemetry.configure(
+                service_name=os.environ.get("OTEL_SERVICE_NAME", "ieee2030-gateway"),
+                endpoint=cfg.telemetry.endpoint or _otel_env,
+                resource_attributes={"device.sfdi": cfg.sfdi},
+            )
+        except Exception as exc:
+            logger.warning("Telemetry setup failed: %s — continuing without it", exc)
+
     if args.dry_run:
         logger.info("Config OK — dry run complete")
         print(f"Interface : {cfg.interface}")
@@ -75,16 +89,25 @@ def main(argv: list[str] | None = None) -> int:
     # Connect field protocol first so we can read device state before the
     # C binary launches. Settings XML must be written before client_test runs
     # because the C binary reads them only once at startup.
-    with bridge.protocol:
-        reads = cfg.modbus.reads if cfg.protocol == "modbus" and cfg.modbus else None
-        state = read_device_state(bridge.protocol, reads)
+    try:
+        with telemetry.span(
+            "gateway.run",
+            server_uri=cfg.server_uri,
+            protocol=cfg.protocol,
+            sfdi=cfg.sfdi,
+        ):
+            with bridge.protocol:
+                reads = cfg.modbus.reads if cfg.protocol == "modbus" and cfg.modbus else None
+                state = read_device_state(bridge.protocol, reads)
 
-        logger.info("Writing DER settings XML to %s", _SETTINGS_DIR)
-        write_settings(state, _SETTINGS_DIR)
+                logger.info("Writing DER settings XML to %s", _SETTINGS_DIR)
+                write_settings(state, _SETTINGS_DIR)
 
-        with EpriClient(cfg) as client:
-            for event in client.events():
-                bridge.apply(event)
+                with EpriClient(cfg) as client:
+                    for event in client.events():
+                        bridge.apply(event)
+    finally:
+        telemetry.shutdown()
 
     return 0
 

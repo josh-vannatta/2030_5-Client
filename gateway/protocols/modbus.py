@@ -12,6 +12,7 @@ from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusException
 
 from . import FieldProtocol
+from .. import telemetry
 from ..config import ModbusConfig
 
 logger = logging.getLogger(__name__)
@@ -49,7 +50,9 @@ class ModbusAdapter(FieldProtocol):
             slave=self.cfg.unit_id,
         )
         if result.isError():
+            telemetry.count("gateway_modbus_errors_total", operation="write")
             raise ModbusException(f"Write failed at register {address}: {result}")
+        telemetry.count("gateway_modbus_writes_total")
 
     def read_register(self, address: int) -> int:
         self._require_connected()
@@ -59,9 +62,11 @@ class ModbusAdapter(FieldProtocol):
             slave=self.cfg.unit_id,
         )
         if result.isError():
+            telemetry.count("gateway_modbus_errors_total", operation="read")
             raise ModbusException(f"Read failed at register {address}: {result}")
         value: int = result.registers[0]
         logger.debug("Modbus read  reg=%d value=%d", address, value)
+        telemetry.count("gateway_modbus_reads_total")
         return value
 
     def _require_connected(self) -> None:

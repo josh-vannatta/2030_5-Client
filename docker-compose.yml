@@ -1,0 +1,82 @@
+# IEEE 2030.5 Gateway — local observability stack
+#
+# Runs the gateway together with grafana/otel-lgtm, which bundles:
+#   Grafana   — dashboards & exploration  → http://localhost:3000  (admin / admin)
+#   Tempo     — distributed traces
+#   Mimir     — metrics (Prometheus-compatible)
+#   Loki      — structured logs
+#   OTel collector — OTLP HTTP :4318 / gRPC :4317
+#
+# Quick start:
+#   docker compose up --build
+#
+# The gateway's telemetry is activated via OTEL_EXPORTER_OTLP_ENDPOINT below —
+# no changes to config/gateway.yaml are required.
+#
+# Network note:
+#   Both services share the bridge network `gateway-net`, so the gateway
+#   resolves the collector by service name (http://otel-lgtm:4318).
+#   The gateway can still reach external hosts (2030.5 server, Modbus device)
+#   through the bridge's default NAT route.
+#
+#   If the C client must bind to a specific host interface (e.g. for 2030.5
+#   multicast or link-local addressing), replace the gateway's `networks` block
+#   with `network_mode: host` and change OTEL_EXPORTER_OTLP_ENDPOINT to
+#   http://localhost:4318.
+
+services:
+
+  # ── Grafana LGTM (all-in-one OTel collector + observability backend) ─────
+  otel-lgtm:
+    image: grafana/otel-lgtm:latest
+    container_name: otel-lgtm
+    ports:
+      - "3000:3000"   # Grafana UI
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
+    networks:
+      - gateway-net
+
+  # ── IEEE 2030.5 gateway ──────────────────────────────────────────────────
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ieee2030-gateway
+    depends_on:
+      otel-lgtm:
+        condition: service_healthy
+    volumes:
+      # Config and certificates are mounted read-only.
+      # Ensure config/gateway.yaml, config/certs/device.pem, and
+      # config/certs/ca/ exist on the host before starting.
+      - ./config:/app/config:ro
+    environment:
+      # ── Telemetry ─────────────────────────────────────────────────────────
+      # Setting OTEL_EXPORTER_OTLP_ENDPOINT is enough to activate telemetry
+      # without changing gateway.yaml (the gateway checks this env var at
+      # startup alongside config.telemetry.enabled).
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-lgtm:4318
+      - OTEL_SERVICE_NAME=ieee2030-gateway
+      - OTEL_RESOURCE_ATTRIBUTES=deployment.environment=local
+
+      # ── Gateway secrets (optional — can also be set in gateway.yaml) ──────
+      # - GATEWAY_SFDI=<sfdi>
+      # - GATEWAY_PIN=<pin>
+      # - GATEWAY_CERT=/app/config/certs/device.pem
+    networks:
+      - gateway-net
+    restart: unless-stopped
+
+networks:
+  gateway-net:
+    driver: bridge

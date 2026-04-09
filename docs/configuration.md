@@ -14,12 +14,13 @@ These overrides are applied during config load before validation.
 
 ### Configuration structure
 
-The config file is organized into four top-level sections:
+The config file is organized into five top-level sections:
 
 * `device`
 * `server`
 * `protocol`
-* `logging` 
+* `logging`
+* `telemetry`
 
 ### `device`
 
@@ -116,7 +117,75 @@ Supported behavior:
 
 * `level` controls Python logging verbosity
 * `format` can be `text` or `json`
-* `file` optionally duplicates output to a file path 
+* `file` optionally duplicates output to a file path
+
+### `telemetry`
+
+Controls OpenTelemetry export. All three signal types — traces, metrics, and structured logs — share a single endpoint configuration. The `telemetry` section is optional; when absent the gateway runs with zero OTel overhead.
+
+```yaml
+telemetry:
+  enabled: false
+  # endpoint: http://otel-lgtm:4318
+```
+
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `enabled` | bool | `false` | Activate OTel export. Also auto-enabled by `OTEL_EXPORTER_OTLP_ENDPOINT` in the environment. |
+| `endpoint` | string | — | Base OTLP/HTTP endpoint. Signals go to `{endpoint}/v1/traces`, `/v1/metrics`, `/v1/logs`. Omit to rely on the env var or the SDK default (`http://localhost:4318`). |
+
+Telemetry is activated when **either** `enabled: true` is set in config **or** `OTEL_EXPORTER_OTLP_ENDPOINT` is present in the environment. When both are absent the gateway starts with no OTel code loaded and no network connections attempted.
+
+#### Environment variable reference
+
+All standard OpenTelemetry SDK env vars are honoured automatically. The gateway-specific ones (`GATEWAY_*`) are separate.
+
+| Env var | Purpose |
+| --- | --- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Base OTLP/HTTP endpoint; also auto-enables telemetry |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Per-signal override for traces |
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | Per-signal override for metrics |
+| `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | Per-signal override for logs |
+| `OTEL_SERVICE_NAME` | Service name shown in Grafana (default: `ieee2030-gateway`) |
+| `OTEL_RESOURCE_ATTRIBUTES` | Additional resource tags, comma-separated `key=value` pairs |
+
+#### Exported signals
+
+**Traces**
+
+| Span | Source | Key attributes |
+| --- | --- | --- |
+| `gateway.run` | `__main__` | `server_uri`, `protocol`, `sfdi` |
+| `epri_client.session` | `client.py` | `binary`, `pid` |
+| `bridge.event` | `bridge.py` | `event_type`, `sfdi` |
+
+**Metrics**
+
+| Metric | Type | Description |
+| --- | --- | --- |
+| `gateway_client_runs_total` | counter | C binary subprocess starts |
+| `gateway_client_events_total` | counter | `EVENT_JSON` lines parsed (tagged `event_type`) |
+| `gateway_client_errors_total` | counter | Non-zero subprocess exits |
+| `gateway_client_run_duration_ms` | histogram | Full subprocess session duration |
+| `gateway_bridge_events_total` | counter | DERControl events applied (tagged `event_type`) |
+| `gateway_bridge_errors_total` | counter | Modbus write failures (tagged `register`) |
+| `gateway_modbus_reads_total` | counter | `read_register` calls |
+| `gateway_modbus_writes_total` | counter | `write_register` calls |
+| `gateway_modbus_errors_total` | counter | Modbus exceptions (tagged `operation`) |
+
+**Logs**
+
+All Python `logging` output is forwarded to the OTel log signal via a `LoggingHandler` attached to the root logger at startup. No changes to existing log call sites are required. The `level`, `format`, and `file` settings in the `logging` section continue to control console/file output independently.
+
+#### Required packages
+
+The OTel packages are an optional dependency group and are not installed by default:
+
+```bash
+uv sync --group otel
+```
+
+The gateway will log a warning and continue normally if telemetry is enabled in config but the packages are not installed. See [development.md](development.md) for a local collector setup guide.
 
 ## Full example config
 
@@ -161,6 +230,10 @@ protocol:
 logging:
   level: INFO
   format: text
+
+telemetry:
+  enabled: false
+  # endpoint: http://otel-lgtm:4318
 ```
 
 ## Documentation

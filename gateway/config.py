@@ -79,6 +79,25 @@ class LogConfig:
 
 
 @dataclass
+class TelemetryConfig:
+    """OpenTelemetry export settings.
+
+    Telemetry is activated when ``enabled`` is True *or* when
+    ``OTEL_EXPORTER_OTLP_ENDPOINT`` is present in the environment.
+    When both are unset the gateway runs with zero OTel overhead.
+    """
+
+    enabled: bool = False
+    # Base OTLP/HTTP endpoint. Signals are posted to {endpoint}/v1/{signal}.
+    # Omit to rely on OTEL_EXPORTER_OTLP_ENDPOINT (or the SDK default
+    # http://localhost:4318).  Per-signal env vars always take precedence:
+    #   OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+    #   OTEL_EXPORTER_OTLP_METRICS_ENDPOINT
+    #   OTEL_EXPORTER_OTLP_LOGS_ENDPOINT
+    endpoint: str | None = None
+
+
+@dataclass
 class Config:
     # Network interface the C client listens on (e.g. eth0)
     interface: str
@@ -102,6 +121,7 @@ class Config:
     modbus: ModbusConfig | None = None
     dnp3: Dnp3Config | None = None
     log: LogConfig = field(default_factory=LogConfig)
+    telemetry: TelemetryConfig = field(default_factory=TelemetryConfig)
 
     def validate(self) -> None:
         """Raise ValueError for any missing or invalid fields."""
@@ -169,6 +189,7 @@ def _build(raw: dict) -> Config:
     server = raw.get("server", {})
     proto = raw.get("protocol", {})
     log_raw = raw.get("logging", {})
+    telemetry_raw = raw.get("telemetry", {})
 
     modbus_cfg = None
     dnp3_cfg = None
@@ -211,5 +232,9 @@ def _build(raw: dict) -> Config:
             level=log_raw.get("level", "INFO"),
             format=log_raw.get("format", "text"),
             file=log_raw.get("file"),
+        ),
+        telemetry=TelemetryConfig(
+            enabled=bool(telemetry_raw.get("enabled", False)),
+            endpoint=telemetry_raw.get("endpoint") or None,
         ),
     )

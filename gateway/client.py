@@ -14,9 +14,11 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
+import time
 from pathlib import Path
 from typing import Generator, Iterator
 
+from . import telemetry
 from .config import Config
 
 logger = logging.getLogger(__name__)
@@ -90,20 +92,44 @@ class EpriClient:
             raise EpriClientError("Client not started. Call start() first.")
 
         assert self._proc.stdout is not None
-        for line in self._proc.stdout:
-            line = line.rstrip("\n")
-            if line.startswith(EVENT_PREFIX):
-                payload = line[len(EVENT_PREFIX):]
-                try:
-                    yield json.loads(payload)
-                except json.JSONDecodeError:
-                    logger.warning("Malformed event JSON: %s", payload)
-            else:
-                logger.debug("[epri] %s", line)
 
-        rc = self._proc.wait()
-        if rc != 0:
-            raise EpriClientError(f"client_test exited with code {rc}")
+        binary_name = self.binary.name
+        telemetry.count("gateway_client_runs_total", binary=binary_name)
+        started_at = time.monotonic()
+
+        with telemetry.span(
+            "epri_client.session",
+            binary=binary_name,
+            pid=self._proc.pid,
+        ):
+            for line in self._proc.stdout:
+                line = line.rstrip("\n")
+                if line.startswith(EVENT_PREFIX):
+                    payload = line[len(EVENT_PREFIX):]
+                    try:
+                        event = json.loads(payload)
+                        telemetry.count(
+                            "gateway_client_events_total",
+                            event_type=event.get("type", "unknown"),
+                        )
+                        yield event
+                    except json.JSONDecodeError:
+                        logger.warning("Malformed event JSON: %s", payload)
+                else:
+                    logger.debug("[epri] %s", line)
+
+            rc = self._proc.wait()
+            elapsed_ms = (time.monotonic() - started_at) * 1000.0
+            telemetry.record(
+                "gateway_client_run_duration_ms", elapsed_ms, binary=binary_name
+            )
+            if rc != 0:
+                telemetry.count(
+                    "gateway_client_errors_total",
+                    binary=binary_name,
+                    exit_code=str(rc),
+                )
+                raise EpriClientError(f"client_test exited with code {rc}")
 
     # ------------------------------------------------------------------
     # Internal
